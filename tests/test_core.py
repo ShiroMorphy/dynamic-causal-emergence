@@ -36,6 +36,6 @@ def test_temporal_weights_normalization():
 def test_effective_information_deterministic():
     A = np.eye(2)
     Sigma = 0.01 * np.eye(2)
-    decomp = compute_gaussian_effective_information(A, Sigma, domain_bound=1.0)
+    decomp = compute_gaussian_effective_information(A, Sigma)
     assert decomp.effective_information > 0.0
     assert decomp.determinism > decomp.degeneracy

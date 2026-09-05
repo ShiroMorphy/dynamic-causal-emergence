@@ -91,8 +91,9 @@ def run_estimation_for_panel(
     for t_idx, q_star in enumerate(model.causal_dimension_):
         macro_ei_optimal[t_idx] = model.macro_ei_[q_star][t_idx]
         
-    # Raw emergence
-    raw_dce = macro_ei_optimal - model.micro_ei_
+    # Raw emergence and density gain
+    raw_dce = model.optimal_dce_raw_ if hasattr(model, "optimal_dce_raw_") else (macro_ei_optimal - model.micro_ei_)
+    density_dce = model.optimal_dce_density_ if hasattr(model, "optimal_dce_density_") else model.emergence_
     
     res_df = pd.DataFrame({
         "timestamp": timestamps,
@@ -104,16 +105,29 @@ def run_estimation_for_panel(
         "forecast_error": fe,
         "micro_ei": model.micro_ei_,
         "macro_ei": macro_ei_optimal,
+        "dcd_pr": model.dcd_pr_,
+        "dcd_entropy": model.dcd_entropy_,
+        "q90": model.q90_,
+        "ccg_optimal": density_dce,
+        "dce_raw_optimal": raw_dce,
         "dce_raw": raw_dce,
-        "dce_norm": model.emergence_,
+        "dce_density": density_dce,
+        "dce_norm": density_dce,
         "q_star": model.causal_dimension_,
+        "q_star_raw": getattr(model, "causal_dimension_raw_", model.causal_dimension_),
+        "q_star_density": getattr(model, "causal_dimension_density_", model.causal_dimension_),
         "q_confset": confsets_str,
         "q_confset_size": confsets_size
     })
     
+    for i in range(p_dim):
+        res_df[f"causal_spectrum_{i+1}"] = model.causal_spectrum_[:, i]
+    
     for q in macro_dims:
         res_df[f"macro_ei_q{q}"] = model.macro_ei_[q]
-        res_df[f"dce_norm_q{q}"] = (model.macro_ei_[q] / q) - (model.micro_ei_ / p_dim)
+        res_df[f"dce_raw_q{q}"] = model.macro_ei_[q] - model.micro_ei_
+        res_df[f"dce_density_q{q}"] = (model.macro_ei_[q] / q) - (model.micro_ei_ / p_dim)
+        res_df[f"dce_norm_q{q}"] = res_df[f"dce_density_q{q}"]
         
     os.makedirs(output_dir, exist_ok=True)
     fname = f"{interconnection.lower()}_dce_{tag}_{mode_str}.parquet"

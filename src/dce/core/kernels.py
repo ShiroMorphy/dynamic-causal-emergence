@@ -88,6 +88,44 @@ def compute_temporal_weights(
     return raw_weights / sum_w
 
 
+def compute_retrospective_weights(
+    center_t: int,
+    total_t: int,
+    bandwidth: float,
+    kernel_type: str = "gaussian"
+) -> np.ndarray:
+    """
+    Symmetric retrospective temporal kernel weights:
+        w_{t, s}^{retro} = K((s - t) / h) / sum_{tau} K((tau - t) / h)
+    """
+    return compute_temporal_weights(
+        center_t=center_t,
+        total_t=total_t,
+        bandwidth=bandwidth,
+        kernel_type=kernel_type,
+        causal_only=False
+    )
+
+
+def compute_causal_weights(
+    center_t: int,
+    total_t: int,
+    bandwidth: float,
+    kernel_type: str = "gaussian"
+) -> np.ndarray:
+    """
+    Strictly one-sided causal online temporal kernel weights:
+        w_{t, s}^{causal} = K((t - s) / h) * 1(s <= t) / sum_{tau <= t} K((t - tau) / h)
+    """
+    return compute_temporal_weights(
+        center_t=center_t,
+        total_t=total_t,
+        bandwidth=bandwidth,
+        kernel_type=kernel_type,
+        causal_only=True
+    )
+
+
 def audit_kernel_leakage(weights: np.ndarray, center_t: int, causal_only: bool = True) -> bool:
     """
     Verify that temporal weights do not leak future information.

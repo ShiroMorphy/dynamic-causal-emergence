@@ -7,6 +7,7 @@ H3: Matched Event Study & Dimensional Collapse Analysis during Extreme Crisis Ev
 H4: Out-of-Sample Walk-Forward Predictive Regressions & Diebold-Mariano Tests.
 """
 
+import os
 from typing import Any, Callable, Dict, List, NamedTuple, Optional, Tuple, Union
 import numpy as np
 import pandas as pd
@@ -107,45 +108,67 @@ def run_h1_surrogate_test(
     fit_model_fn: Callable[[np.ndarray], np.ndarray],
     n_surrogates: int = 50,
     alpha: float = 0.05,
-    seed: int = 42
+    seed: int = 42,
+    test_direction: str = "greater"
 ) -> Hypothesis1Result:
     """
     Test H1: Surrogate testing with full model refitting on each surrogate (CRITICAL-02).
     
     Args:
-        empirical_dce: (T,) estimated DCE from real microstate data.
+        empirical_dce: (T,) estimated DCE/DCD from real microstate data.
         X_micro: (T, p) real microstate matrix.
         fit_model_fn: Callable that accepts X_surr and returns emergence array (T,).
         n_surrogates: Number of surrogate realizations (B >= 50).
         alpha: Significance level.
         seed: Random seed.
+        test_direction: "greater" (emergence/concentration), "less" (dimensional contraction), or "two-sided".
     """
     T = len(empirical_dce)
-    print(f"Generating {n_surrogates} multivariate IAAFT surrogates (T={X_micro.shape[0]}, p={X_micro.shape[1]})...")
-    surrogates = generate_multivariate_surrogates(X_micro, n_surrogates=n_surrogates, seed=seed)
+    print(f"Generating {n_surrogates} strictly accepted multivariate IAAFT surrogates (T={X_micro.shape[0]}, p={X_micro.shape[1]})...")
+    surrogates = generate_multivariate_surrogates(X_micro, n_surrogates=n_surrogates, seed=seed, strictly_accepted=True)
     
-    surr_dce_ensemble = np.zeros((n_surrogates, T), dtype=np.float64)
     print(f"Refitting DCE model on {n_surrogates} surrogates to construct exact null distribution...")
-    for b in range(n_surrogates):
-        surr_dce_ensemble[b, :] = fit_model_fn(surrogates[b])
+    from concurrent.futures import ThreadPoolExecutor
+    workers = min(n_surrogates, max(1, (os.cpu_count() or 4) - 1))
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        surr_results = list(executor.map(fit_model_fn, surrogates))
+    surr_dce_ensemble = np.array(surr_results, dtype=np.float64)
         
     # 1. Pointwise exceedance p-values
-    exceedances = np.sum(surr_dce_ensemble >= empirical_dce[np.newaxis, :], axis=0)
+    if test_direction == "less":
+        exceedances = np.sum(surr_dce_ensemble <= empirical_dce[np.newaxis, :], axis=0)
+    elif test_direction == "two-sided":
+        surr_mean_pt = np.mean(surr_dce_ensemble, axis=0, keepdims=True)
+        exceedances = np.sum(np.abs(surr_dce_ensemble - surr_mean_pt) >= np.abs(empirical_dce[np.newaxis, :] - surr_mean_pt), axis=0)
+    else:  # "greater"
+        exceedances = np.sum(surr_dce_ensemble >= empirical_dce[np.newaxis, :], axis=0)
+        
     p_values_pointwise = (exceedances + 1.0) / (n_surrogates + 1.0)
     q_values_fdr = fdr_bh(p_values_pointwise)
     
     sig_raw = float(np.mean(p_values_pointwise < alpha))
     sig_fdr = float(np.mean(q_values_fdr < alpha))
     
-    # 2. Global Max Test Statistic: T_max = max_t DCE_t
-    t_max_emp = float(np.max(empirical_dce))
-    t_max_surr = np.max(surr_dce_ensemble, axis=1)
-    p_max = float((np.sum(t_max_surr >= t_max_emp) + 1.0) / (n_surrogates + 1.0))
+    # 2. Global Max / Extreme Test Statistic
+    if test_direction == "less":
+        t_max_emp = float(np.min(empirical_dce))
+        t_max_surr = np.min(surr_dce_ensemble, axis=1)
+        p_max = float((np.sum(t_max_surr <= t_max_emp) + 1.0) / (n_surrogates + 1.0))
+    else:
+        t_max_emp = float(np.max(empirical_dce))
+        t_max_surr = np.max(surr_dce_ensemble, axis=1)
+        p_max = float((np.sum(t_max_surr >= t_max_emp) + 1.0) / (n_surrogates + 1.0))
     
     # 3. Global Mean Test Statistic: T_mean = mean_t DCE_t
     t_mean_emp = float(np.mean(empirical_dce))
     t_mean_surr = np.mean(surr_dce_ensemble, axis=1)
-    p_mean = float((np.sum(t_mean_surr >= t_mean_emp) + 1.0) / (n_surrogates + 1.0))
+    if test_direction == "less":
+        p_mean = float((np.sum(t_mean_surr <= t_mean_emp) + 1.0) / (n_surrogates + 1.0))
+    elif test_direction == "two-sided":
+        grand_surr_mean = float(np.mean(t_mean_surr))
+        p_mean = float((np.sum(np.abs(t_mean_surr - grand_surr_mean) >= np.abs(t_mean_emp - grand_surr_mean)) + 1.0) / (n_surrogates + 1.0))
+    else:
+        p_mean = float((np.sum(t_mean_surr >= t_mean_emp) + 1.0) / (n_surrogates + 1.0))
     
     surr_95th = np.percentile(surr_dce_ensemble, 95.0, axis=0)
     
@@ -447,24 +470,31 @@ def compute_h4_walk_forward_forecasting(
         pred_base_list = []
         pred_aug_list = []
         
-        # Walk-forward rolling origin
+        # Walk-forward rolling origin with strictly lookahead-free training pairs (tau + h <= origin)
         for origin in range(effective_train_window, T_total - h, eval_step):
-            # Target at horizon h
+            # Target to forecast at horizon h
             y_target = forecast_error[origin + h]
             
-            # Training data available strictly up to origin
-            train_y = forecast_error[h : origin + h]
-            fe_lag0 = forecast_error[:origin]
-            fe_lag1 = np.roll(fe_lag0, 1)
-            fe_lag1[0] = fe_lag0[0]
+            # Historical training indices: tau in [1, origin - h] such that target tau + h <= origin
+            max_train_tau = origin - h
+            if max_train_tau < 10:
+                continue
+                
+            train_tau_start = max(1, max_train_tau - effective_train_window)
+            train_tau = np.arange(train_tau_start, max_train_tau + 1)
             
-            dce_past = dce_causal[:origin]
-            q_past = q_star_causal[:origin]
+            train_y = forecast_error[train_tau + h]  # Latest target is forecast_error[origin], strictly observed!
+            fe_lag0 = forecast_error[train_tau]
+            fe_lag1 = forecast_error[train_tau - 1]
             
-            X_b_train = np.column_stack([np.ones(origin), fe_lag0, fe_lag1])
-            X_a_train = np.column_stack([np.ones(origin), fe_lag0, fe_lag1, dce_past, q_past])
+            dce_past = dce_causal[train_tau]
+            q_past = q_star_causal[train_tau]
             
-            # Predictor at origin
+            n_samples = len(train_tau)
+            X_b_train = np.column_stack([np.ones(n_samples), fe_lag0, fe_lag1])
+            X_a_train = np.column_stack([np.ones(n_samples), fe_lag0, fe_lag1, dce_past, q_past])
+            
+            # Predictor features at current forecast origin
             x_b_orig = np.array([1.0, forecast_error[origin], forecast_error[origin - 1]])
             x_a_orig = np.array([1.0, forecast_error[origin], forecast_error[origin - 1], dce_causal[origin], q_star_causal[origin]])
             

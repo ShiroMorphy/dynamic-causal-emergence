@@ -1,0 +1,32 @@
+# Frozen Surrogate Quality Protocol
+# Pre-specified quality contract for multivariate IAAFT power grid surrogates.
+# Hard acceptance guarantees physical linear preservation and non-trivial decorrelation.
+# Diagnostic metrics quantify higher-order nonlinearity destruction without conditioning the null.
+
+version: "2.0"
+description: "Frozen acceptance tolerances for multivariate IAAFT power grid surrogates"
+
+hard_acceptance:
+  preservation:
+    # Exact marginal quantile preservation (Kolmogorov-Smirnov / sorted relative difference)
+    marginal_max_error: 1.0e-10
+    # Relative Frobenius error on diagonal auto-spectral density matrix
+    auto_spectrum_error: 0.08
+    # Relative Frobenius error on lag-1 to lag-24 autocorrelation functions
+    autocorrelation_error: 0.15
+    # Relative Frobenius error on contemporaneous covariance matrix
+    covariance_error: 0.15
+    # Relative Frobenius error on full cross-spectral density tensor
+    cross_spectrum_error: 0.15
+
+  non_triviality:
+    # Mean absolute correlation between original series and surrogate channel
+    # Guarantees the surrogate is decoupled from original and not a trivial replica
+    max_mean_abs_correlation: 0.25
+    # Minimum normalized RMS distance ||S - X||_F / ||X||_F
+    min_rms_relative_distance: 0.20
+
+diagnostic_metrics:
+  # Diagnostic only: monitored to verify phase randomization destroys higher-order structure.
+  # These metrics do NOT reject surrogates, avoiding conditioning of the null distribution.
+  expected_time_reversal_ratio: 0.75

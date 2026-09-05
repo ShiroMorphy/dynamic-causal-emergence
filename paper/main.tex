@@ -1,7 +1,8 @@
 \documentclass[10pt,twocolumn,journal]{article}
 \usepackage[utf8]{inputenc}
-\usepackage{amsmath,amssymb,amsfonts,bm}
+\usepackage{amsmath,amssymb,amsfonts,bm,mathtools}
 \usepackage{graphicx}
+\graphicspath{{figures/}{paper/figures/}{./}}
 \usepackage{booktabs}
 \usepackage{cite}
 \usepackage{hyperref}
@@ -22,8 +23,8 @@
     hypertexnames=false
 }
 
-\title{\textbf{Dynamic Causal Emergence: Detecting Time-Varying Macroscopic Causality in Nonstationary Complex Systems}\\
-\large Evidence from Renewable-Dominated Continental Power Grids}
+\title{\textbf{Dynamic Causal Dimensionality in Nonstationary Complex Systems:}\\
+\large Effective-Information Concentration and Evidence from U.S. Power Grids}
 
 \author{
   \textbf{Felipe Mora-Rojas}\textsuperscript{1,*} \\
@@ -37,243 +38,240 @@
 \maketitle
 
 \begin{abstract}
-Causal Emergence (CE) theory formalizes how macroscopic representations of complex systems can possess greater causal power, determinism, and predictive efficacy than their underlying microscopic components. However, existing theoretical formulations and deep learning estimators implicitly assume stationary transition dynamics $P(X_{t+1}|X_t)$, rendering them blind to the time-varying operational regimes, critical phase transitions, and multiscale reorganizations ubiquitous in real-world systems. Here, we introduce \textbf{Dynamic Causal Emergence ($DCE_t$)}, a mathematically rigorous and neural variational framework for quantifying time-varying macroscopic causality in nonstationary complex systems. Our neural estimator, \textbf{Dyn-NIS+}, optimizes an online multi-objective objective balancing predictive fidelity, continuous interventional Effective Information ($EI_t$) under standard Gaussian maximum-entropy interventions, representation orthogonality via Procrustes alignment, and parameter manifold smoothness. We rigorously validate the framework on a canonical suite of synthetic nonstationary benchmarks with analytical ground truths (DGPs A--I), achieving zero false-positive rates under heteroskedastic and nonstationary nulls, 98.7\% causal dimension recovery accuracy, and an 80.0\% reduction in temporal chattering variance over windowed static baselines. We then deploy $DCE_t$ across the continental United States power grid using authenticated hourly EIA-930 operational data across Eastern, Western, and ERCOT synchronous interconnections (two contiguous calendar years, 2021--2022). Evaluating against genuine multivariate IAAFT surrogate ensembles preserving the full cross-spectral density matrix confirms statistically significant macroscopic causal emergence ($p = 0.001 < 0.01$). Non-linear GAMM and threshold regressions demonstrate that Variable Renewable Energy (VRE) penetration nonlinearly modulates causal emergence with verified structural regime breakpoints ($\hat{\gamma} = 21.6\%$ in ERCOT, Newey-West HAC supremum-Wald test $p < 10^{-4}$; $\hat{\gamma} = 37.2\%$ in Western). A matched event study during Winter Storm Uri confirms severe systemic dimensionality collapse ($p = 1.77 \times 10^{-4}$), consistent with an acute contraction in effective macroscopic degrees of freedom during extreme climate shocks. Finally, walk-forward out-of-sample forecasting reveals that causal emergence operates as an interpretable structural regime and stress diagnostic rather than an unconditional linear predictor.
+Causal Emergence (CE) theory formalizes how macroscopic representations of complex systems can exhibit greater causal efficacy than their underlying microscopic components. However, existing formulations rely on stationary transition kernels $P(X_{t+1}|X_t)$ and discrete or static dimensional searches, rendering them blind to the continuous, time-varying operational reorganizations ubiquitous in physical and engineered networks. Furthermore, scalar dimension-normalized emergence metrics $\arg\max_q (EI(V^{(q)})/q)$ mathematically degenerate to $q=1$ under ordered spectra. Here, we establish the theory and methodology of \textbf{Dynamic Causal Dimensionality (DCD)}, resolving the active number of macroscopic causal degrees of freedom through the exact continuous \textbf{Causal Information Spectrum} $e_{i,t} = \frac{1}{2}\ln(1 + \lambda_{i,t})$. We define the continuous \textbf{Dynamic Causal Participation Ratio} ($DCD_t^{\text{PR}}$) and \textbf{Dynamic Causal Effective Rank} ($DCD_t^{\text{entropy}}$), proving their strict rotational invariance under orthogonal coordinate changes. Measure-theoretic interventional semantics are formalized through an \textbf{observational lifting kernel} $\kappa_W(dx \mid v) \triangleq P_{\text{obs}}(X_t \in dx \mid W^\top X_t = v)$, proving that empirical localized regressions directly recover the induced macroscopic channel. We contrast our scale-free Gaussian channel formulation with the compact-domain volume formula of Liu et al. (2024), and document the boundary conditions of linear causal emergence via adversarial counterexample search. Benchmarking on canonical nonstationary DGPs (A--I; $R=100$) establishes exact zero false-positive rates ($\text{FPR} = 0.000$, 95\% Clopper-Pearson CI $[0.000, 0.036]$). Applying the framework to 2021--2022 continental U.S. power grid operations (EIA-930; 367,920 BA-hours across Eastern, Western, and ERCOT interconnections) with full model refitting across $B=1000$ strictly validated IAAFT surrogates confirms highly significant macroscopic causal structuring ($p < 0.001$, FDR significant ratio $92.5\%$). Generalized Additive Models and Davies supremum-Wald tests identify sharp non-linear thresholds driven by renewable penetration ($\hat{\gamma} = 21.6\%$ in ERCOT, $p = 7.55 \times 10^{-5}$; $\hat{\gamma} = 16.0\%$ in Western, $p = 9.30 \times 10^{-3}$). Multi-event analysis reveals acute causal dimensionality collapse during extreme crises (Winter Storm Uri, $p = 1.77 \times 10^{-4}$), demonstrating that extreme infrastructure stress contracts decentralized balancing modes into low-dimensional emergency corridors. Finally, strictly lookahead-free walk-forward forecasting demonstrates that DCD functions as an interpretable structural physical stability diagnostic rather than an unconditional linear forecaster.
 \end{abstract}
 
 \section{Introduction}
-Complex systems across nature and engineering---such as continental power grids, neural assemblies, financial networks, and geophysical fluids---frequently exhibit spontaneous self-organization~\cite{hoel2013quantifying,klein2020emergence}. In such systems, collective macroscopic degrees of freedom often govern the system's dynamics with greater determinism and lower degeneracy than individual microscopic components~\cite{hoel2013quantifying,rosenthal2022causal}. The quantitative framework of \textbf{Causal Emergence (CE)}, grounded in information theory and causal intervention calculus~\cite{hoel2013quantifying}, formalizes this phenomenon: a coarse-grained macro-variable $V = \phi(X)$ exhibits causal emergence when its Effective Information ($EI$) exceeds that of the underlying microscopic state $X$, i.e., $EI(V) > EI(X)$.
+Complex dynamical networks---from neural circuits and cellular metabolisms to continental power grids and financial markets---spontaneously organize across disparate spatiotemporal scales~\cite{hoel2013quantifying,klein2020emergence}. In such systems, macroscopic collective variables often evolve with greater determinism and lower degeneracy than individual microscopic elements~\cite{hoel2013quantifying,rosenthal2022causal,rosas2020reconciling}. The quantitative theory of \textbf{Causal Emergence (CE)}, formalized through interventional information theory~\cite{pearl2009causality,hoel2013quantifying,albantakis2015causal}, provides an exact criterion: a macroscopic representation $V = \phi(X)$ exhibits causal emergence when its Effective Information ($EI$) exceeds that of the underlying microscopic state $X$, i.e., $EI(V) > EI(X)$.
 
 \begin{figure*}[t]
     \centering
     \includegraphics[width=\textwidth]{figures/fig1_conceptual_framework.pdf}
-    \caption{\textbf{Conceptual and Methodological Architecture of Dynamic Causal Emergence ($DCE_t$).} \textbf{a}, Schematic of the time-varying macroscopic coarse-graining mapping $\phi_t: X_t \mapsto V_t$ projecting high-dimensional microscopic states $X_t \in \mathbb{R}^p$ to low-dimensional macroscopic representations $V_t \in \mathbb{R}^q$ ($q < p$). \textbf{b}, Trajectory of continuous Dynamic Effective Information $EI_t(V)$ versus microscopic baseline $EI_t(X)$, illustrating nonstationary regimes of causal emergence ($DCE_t > 0$) and critical regime shifts ($\tau$).}
+    \caption{\textbf{Conceptual and Methodological Architecture of Dynamic Causal Dimensionality (DCD).} \textbf{a}, Time-varying macroscopic coarse-graining projection $\phi_t: X_t \mapsto V_t$ mapping high-dimensional microscopic states $X_t \in \mathbb{R}^p$ to low-dimensional macroscopic representations $V_t \in \mathbb{R}^q$ ($q < p$). \textbf{b}, Trajectory of continuous Dynamic Effective Information $EI_t(V)$ versus microscopic baseline $EI_t(X)$, illustrating nonstationary regimes of causal efficiency gain ($CCG_t(q) > 0$) and critical dynamical reorganization.}
     \label{fig:fig1_framework}
 \end{figure*}
 
-Despite substantial theoretical advancements, a critical limitation pervades existing literature: \textit{all prevailing CE estimators assume stationarity in the underlying dynamical law $P(X_{t+1}|X_t)$}. In real-world physical and socio-technical systems, nonstationarity is pervasive:
+Despite fundamental theoretical insights, existing formulations suffer from a critical limitation: \textit{all established CE estimators implicitly presume a stationary transition mechanism $P(X_{t+1} \mid X_t)$}. In nonstationary environments, stationary estimators average over fundamentally distinct operational regimes:
 \begin{itemize}
-    \item \textbf{Renewable Energy Integration}: Modern power grids undergo rapid, weather-driven swings in synchronous inertia and topology due to variable solar and wind generation~\cite{eia2024eia930}.
-    \item \textbf{Extreme Climate Shocks}: Severe weather events (e.g., extreme freeze, heatwaves) induce structural regime shifts, cascading outages, and emergency load shedding.
-    \item \textbf{Multiscale Dynamic Reorganization}: The optimal scale of causal description is not static; it evolves dynamically between local balancing areas, regional transmission operators (RTOs), and synchronous interconnections.
+    \item \textbf{Renewable Energy Ingestion}: Power grids undergo rapid, weather-driven swings in synchronous inertia and physical topology as inverter-based wind and solar resources displace thermal generators~\cite{eia2024eia930,machowski2020power}.
+    \item \textbf{Extreme Weather and Infrastructure Shocks}: Catastrophic climate events (e.g., severe winter freezes, heatwaves) induce structural regime shifts, cascading line trips, and emergency load-shedding~\cite{menck2014dead,witthaut2016patterns}.
+    \item \textbf{Dynamic Dimensional Reorganization}: The effective number of macroscopic degrees of freedom is time-varying; collective coordination reorganizes continually between decentralized balancing authorities, regional transmission organizations (RTOs), and synchronous interconnections.
 \end{itemize}
 
-Applying static CE estimators (e.g., standard NIS~\cite{rosenthal2022causal}) to nonstationary systems homogenizes distinct operational regimes into an uninformative temporal average. 
-
-To bridge this foundational gap, this work introduces \textbf{Dynamic Causal Emergence ($DCE_t$)}, providing:
+To resolve these challenges, this paper establishes \textbf{Dynamic Causal Dimensionality (DCD)}, contributing:
 \begin{enumerate}
-    \item A mathematically rigorous formulation of continuous, time-varying Effective Information $EI_t$ with explicit interventional measures $\nu_t$ and exact linear-Gaussian closed forms.
-    \item Joint dynamic estimation of time-varying transition mechanisms $P_t$, evolving coarse-graining projections $\phi_t$, and optimal causal dimension $q_t^*$ with representation-space temporal regularization and one-sided online inference.
-    \item A comprehensive synthetic benchmark suite (DGPs A--I) with analytical ground truths, null nonstationary calibration, and Monte Carlo falsification.
-    \item Application to U.S. power grid dynamics (EIA-930) with stable-panel cohorts, physical interconnection separation, and leak-free out-of-sample forecast evaluation.
-    \item Exploration of multiscale causal apportioning extending the formal foundations of \textbf{Causal Emergence 2.0}~\cite{hoel2026causal}.
+    \item Continuous causal spectrum decomposition $e_{i,t} = \frac{1}{2}\ln(1 + \lambda_{i,t})$ resolving the active macroscopic dimensionality via Causal Participation Ratio ($DCD_t^{\text{PR}}$) and Causal Effective Rank ($DCD_t^{\text{entropy}}$), circumventing running-average degeneracy.
+    \item Exact interventional semantics via the observational lifting kernel $\kappa_W(dx \mid v)$, proving that projected regressions recover true Markov macro-dynamics.
+    \item Primary analytical estimation via \textbf{Local Affine-Gaussian DCE}, complemented by an online neural variational estimator (\textbf{Dyn-NIS+}) for non-linear manifolds.
+    \item Clarification of linear causal emergence limits, contrasting scale-free Gaussian mutual information against bounded-domain volume formulations (Liu et al. 2024) and demonstrating destructive noise cancellation via adversarial search.
+    \item Rigorous Monte Carlo benchmarking across synthetic nonstationary DGPs (A--I; $R=100$) and empirical application to continental U.S. power grids (EIA-930; 367,920 BA-hours) evaluating hypotheses H1--H4 with $B=1000$ refitted surrogates.
 \end{enumerate}
-
 
 \section{Mathematical Formulation}
 
-\subsection{Continuous Dynamic Effective Information}
-Let $X_t \in \mathcal{X} \subseteq \mathbb{R}^p$ denote the microscopic state vector of a nonstationary complex system at time $t \in [0, T]$. The underlying system evolves according to a time-dependent transition probability density $P_t(X_{t+1} \mid X_t)$.
-
-To quantify causal power independent of the historical observational state distribution, we apply Pearl's intervention calculus~\cite{pearl2009causality,hoel2013quantifying}. We define the primary interventional distribution as a standard maximum-entropy Gaussian distribution over whitened coordinates:
+\subsection{Continuous Dynamic Effective Information and the Causal Spectrum}
+Let $X_t \in \mathbb{R}^p$ denote the microscopic state vector of a nonstationary dynamical system at time $t \in [0, T]$, governed by localized linear perturbation dynamics $X_{t+1} = A_t X_t + c_t + \epsilon_t$ with innovation covariance $\epsilon_t \sim \mathcal{N}(0, \Sigma_t)$, $\Sigma_t \succ 0$. Following Pearl's do-calculus~\cite{pearl2009causality,hoel2013quantifying}, we inject a standard maximum-entropy Gaussian intervention under covariance constraint $\Sigma_{do} = I_p$:
 \begin{equation}
-do(X_t) \sim \nu_X = \mathcal{N}(0, \Sigma_{do}), \quad \Sigma_{do} = I_p
+do(X_t) \sim \nu_X = \mathcal{N}(0, I_p)
 \label{eq:intervention_def}
 \end{equation}
-Under local Gaussian perturbation dynamics $X_{t+1} = A_t X_t + \epsilon_t$ with $\epsilon_t \sim \mathcal{N}(0, \Sigma_t)$, the interventional post-state distribution is Gaussian: $X_{t+1} \mid do(X_t) \sim \mathcal{N}(0, A_t \Sigma_{do} A_t^\top + \Sigma_t)$. The continuous \textbf{Dynamic Effective Information} at time $t$ is the localized mutual information under intervention:
+Under this isotropic intervention, the output distribution is $X_{t+1} \mid do(X_t) \sim \mathcal{N}(c_t, A_t A_t^\top + \Sigma_t)$. The continuous \textbf{Dynamic Effective Information} is the exact mutual information under intervention:
 \begin{equation}
 \begin{aligned}
 EI_t(X) &= I(do(X_t) ; X_{t+1}) \\
-&= H_t(X_{t+1} \mid do(X_t)) - H_t(X_{t+1} \mid X_t) \\
-&= \frac{1}{2} \ln \frac{\det \left( A_t \Sigma_{do} A_t^\top + \Sigma_t \right)}{\det \left( \Sigma_t \right)}
+&= \frac{1}{2} \ln \det \left( I_p + \Sigma_t^{-1} A_t A_t^\top \right) = \frac{1}{2} \sum_{i=1}^p \ln \left( 1 + \lambda_{i,t} \right)
 \end{aligned}
 \label{eq:gaussian_ei}
 \end{equation}
-which decomposes canonically into \textbf{Determinism} ($-\frac{1}{2} \ln \det \Sigma_t$) and \textbf{Non-degeneracy} ($\frac{1}{2} \ln \det(A_t \Sigma_{do} A_t^\top + \Sigma_t)$).
+where $\lambda_{i,t} \ge 0$ are the eigenvalues of $\Sigma_t^{-1} A_t A_t^\top$ (or generalized eigenvalues of the pencil $(A_t A_t^\top, \Sigma_t)$).
 
-\noindent \textit{Remark 1 (Intervention Measures and Resampling).} In the compact uniform setting $do(X_t \sim \mathcal{U}([-a, a]^p))$, the second-moment matrix is $\Sigma_{do} = \frac{a^2}{3} I_p$, which yields an identical log-determinant ratio up to the global scale factor $\frac{a^2}{3}$. While neural estimators such as NIS+~\cite{yang2025finding} approximate uniform interventions non-parametrically via inverse-probability reweighting or interventional sampling, the standardized Gaussian maximum-entropy intervention~\eqref{eq:intervention_def} provides an exact, rotationally invariant analytical reference eliminating interventional Monte Carlo variance.
+\noindent \textbf{Definition 1 (Causal Information Spectrum).} The localized Causal Information Spectrum $\{e_{i,t}\}_{i=1}^p$ is the set of mode-specific mutual information contributions:
+\begin{equation}
+e_{i,t} \triangleq \frac{1}{2} \ln \left( 1 + \lambda_{i,t} \right) \ge 0, \quad e_{1,t} \ge e_{2,t} \ge \dots \ge e_{p,t} \ge 0
+\end{equation}
+such that $EI_t(X) = \sum_{i=1}^p e_{i,t}$.
+
+\subsection{Dynamic Causal Dimensionality (DCD)}
+Existing causal emergence formulations attempt to identify an optimal macroscopic scale by maximizing dimension-normalized metrics $q^* = \arg\max_q (EI(V^{(q)})/q)$. However, when causal modes are ordered $e_1 \ge e_2 \ge \dots \ge e_p$, the running average $\frac{1}{q}\sum_{i=1}^q e_i$ is monotonically non-increasing, causing $q^*$ to collapse degenerately to $q=1$. 
+
+To establish an unconstrained, continuous measure of active causal scale, we introduce \textbf{Dynamic Causal Dimensionality (DCD)}:
+
+\noindent \textbf{Definition 2 (Causal Participation Ratio).} The Dynamic Causal Participation Ratio is:
+\begin{equation}
+DCD_t^{\text{PR}} \triangleq \frac{\left( \sum_{i=1}^p e_{i,t} \right)^2}{\sum_{i=1}^p e_{i,t}^2}
+\label{eq:dcd_pr}
+\end{equation}
+with the continuous convention $DCD_t^{\text{PR}} = 0$ if $EI_t(X) = 0$. For a system with $k$ identical active causal channels and $p-k$ silent channels, $DCD_t^{\text{PR}} = k$ exactly.
+
+\noindent \textbf{Definition 3 (Causal Effective Rank).} Defining the normalized causal spectral weights $\pi_{i,t} \triangleq e_{i,t} / EI_t(X)$ (with $\sum \pi_{i,t} = 1$), the Dynamic Causal Effective Rank is:
+\begin{equation}
+DCD_t^{\text{entropy}} \triangleq \exp \left( - \sum_{i: \pi_{i,t} > 0} \pi_{i,t} \ln \pi_{i,t} \right)
+\label{eq:dcd_entropy}
+\end{equation}
+with $DCD_t^{\text{entropy}} = 0$ if $EI_t(X) = 0$.
+
+\noindent \textbf{Theorem 1 (Rotational Invariance of DCD).} \textit{Let $Q \in O(p)$ be an arbitrary orthogonal transformation ($Q^\top Q = Q Q^\top = I_p$). Under coordinate change $X_t' = Q X_t$, dynamic matrices transform as $A_t' = Q A_t Q^\top$ and $\Sigma_t' = Q \Sigma_t Q^\top$. Then the Causal Information Spectrum $\{e_{i,t}\}$, the Participation Ratio $DCD_t^{\text{PR}}$, and the Effective Rank $DCD_t^{\text{entropy}}$ are strictly invariant.}
+
+\textit{Proof.} The transformed operator is $(\Sigma_t')^{-1} A_t' (A_t')^\top = (Q \Sigma_t Q^\top)^{-1} (Q A_t Q^\top)(Q A_t Q^\top)^\top = Q (\Sigma_t^{-1} A_t A_t^\top) Q^\top$. Because similarity transformations preserve eigenvalues, the spectrum $\{\lambda_{i,t}\}$ and hence $\{e_{i,t}\}$ are identical. $\blacksquare$
+
+\subsection{Observational Lifting Kernel and Induced Macro Dynamics}
+An atomic macroscopic intervention $do(V_t = v)$ on $V_t = W_t^\top X_t \in \mathbb{R}^q$ ($W_t^\top W_t = I_q, q < p$) does not uniquely determine the microscopic state $X_t \in \mathbb{R}^p$. To establish rigorous measure-theoretic interventional semantics, we define the \textbf{observational lifting kernel}:
+\begin{equation}
+\kappa_{W_t}(dx \mid v) \triangleq P_{\text{obs}}(X_t \in dx \mid W_t^\top X_t = v)
+\label{eq:lifting_kernel}
+\end{equation}
+Under the observational Gaussian measure $X_t \sim \mathcal{N}(\mu_{X, t}, \Sigma_{X, t})$, the conditional law is:
+\begin{equation}
+\begin{aligned}
+\kappa_{W_t}(dx \mid v) = \mathcal{N}\Bigl( &\mu_t + \Sigma_{X, t} W_t (W_t^\top \Sigma_{X, t} W_t)^{-1}(v - W_t^\top \mu_t), \\
+&\Sigma_{X \mid V, t}\Bigr)
+\end{aligned}
+\end{equation}
+where $\Sigma_{X \mid V, t} = \Sigma_{X, t} - \Sigma_{X, t} W_t (W_t^\top \Sigma_{X, t} W_t)^{-1} W_t^\top \Sigma_{X, t}$. This induces the exact macroscopic Markov interventional transition:
+\begin{equation}
+\begin{aligned}
+&P_{W_t}(v_{t+1} \in dv' \mid do(V_t = v)) \\
+&\quad = \int_{\mathbb{R}^p} P(W_t^\top X_{t+1} \in dv' \mid X_t = x) \, \kappa_{W_t}(dx \mid v)
+\end{aligned}
+\end{equation}
+Under linear micro-dynamics $X_{t+1} = A_t X_t + \epsilon_t$, this channel is exactly Gaussian:
+\begin{equation}
+\begin{aligned}
+\mathbb{E}[V_{t+1} \mid do(V_t = v)] &= B_t v, \\
+B_t &= W_t^\top A_t \Sigma_{X, t} W_t (W_t^\top \Sigma_{X, t} W_t)^{-1} \\
+\mathrm{Cov}(V_{t+1} \mid do(V_t = v)) &= \Sigma_{\eta, t} \\
+&= W_t^\top (A_t \Sigma_{X \mid V, t} A_t^\top + \Sigma_t) W_t
+\end{aligned}
+\end{equation}
+proving that localized ridge regression on observed projected pairs $(V_t, V_{t+1})$ directly estimates the true interventional macro-dynamics $(B_t, \Sigma_{\eta, t})$ without requiring access to unobserved microstates.
+
+\subsection{Contrast with Liu et al. (2024)}
+Recent continuous formulations by Liu, Yuan \& Zhang (2024)~\cite{liu2024exact} define effective information using a uniform intervention over a bounded hypercube $do(X) \sim \mathcal{U}([-L, L]^n)$:
+\begin{equation}
+EI_{\text{Liu}}(A, \Sigma; L) = \ln \frac{|\det A| L^n}{(2\pi e)^{n/2} (\det \Sigma)^{1/2}}
+\end{equation}
+While foundational for continuous systems, $EI_{\text{Liu}}$ depends monotonically on the arbitrary domain half-width $L$ ($\partial EI / \partial L = n/L$), can become negative for small $L$, and diverges to $-\infty$ when $A$ is singular ($\det A = 0$). In contrast, our Gaussian channel formulation $EI(A, \Sigma) = \frac{1}{2}\ln\det(I + \Sigma^{-1} A A^\top)$ is scale-free, unconditionally non-negative ($EI \ge 0$), and well-defined for arbitrary rank-deficient systems.
+
+\subsection{Causal Concentration Gain and Noise Cancellation}
+To quantify information density per degree of freedom, we define the \textbf{Causal Concentration Gain (CCG)}:
+\begin{equation}
+CCG_t(q) \triangleq \frac{EI_t(V^{(q)})}{q} - \frac{EI_t(X)}{p}
+\label{eq:ccg_def}
+\end{equation}
+Under isotropic noise $\Sigma = \sigma^2 I_p$, Cauchy's interlacing theorem on generalized Rayleigh quotients dictates that eigenvalues of the projected operator interlace the microscopic eigenvalues, enforcing $EI(V^{(q)}) \le EI(X)$ for all $q < p$. However, when microscopic noise $\Sigma$ possesses strong cross-channel covariance, an orthonormal projection $W$ can align with the destructive interference subspace of $\Sigma$, suppressing noise while preserving coherent signal. Through an adversarial numerical search, we confirmed this constructive noise cancellation mechanism: for $p=2, q=1$ with $A = \begin{psmallmatrix} -0.269 & 0.414 \\ 0.094 & 0.020 \end{psmallmatrix}$, $\Sigma = \begin{psmallmatrix} 4.197 & 2.349 \\ 2.349 & 1.553 \end{psmallmatrix}$, and $W = [-0.544, 0.839]^\top$, $EI(V) = 0.2453 > EI(X) = 0.2024$, proving that $EI(V) > EI(X)$ is mathematically achievable in linear systems via correlated noise cancellation.
+
+\subsection{Estimation Architecture: Local Affine DCE and Dyn-NIS+}
+We estimate localized dynamics using two complementary frameworks:
+\begin{itemize}
+    \item \textbf{Local Affine-Gaussian DCE (Primary Reference Estimator)}: Estimates localized affine transition operators $(A_t, c_t, \Sigma_t)$ via weighted kernel ridge regression with temporal bandwidth $h$. Implements retrospective symmetric weights $w_t(s) \propto \exp(-\frac{(s-t)^2}{2h^2})$ for historical diagnostic analysis, and strictly one-sided causal weights $w_t(s) \propto \exp(-\frac{(t-s)^2}{2h^2}) \cdot \mathbb{I}(s \le t)$ for real-time online monitoring. Projections $W_t$ are obtained via eigendecomposition of the localized Fisher causal operator $A_t^\top \Sigma_t^{-1} A_t$.
+    \item \textbf{Dyn-NIS+ (Neural Variational Extension)}: Parameterizes coarse-graining $\phi(X; \theta_t)$ and forward macro-dynamics $f_\psi(V)$ via neural networks, minimizing prediction error $\mathcal{L}_{\text{pred}}$ while maximizing $\widehat{EI}_t(V)$, stabilized by orthogonal Procrustes manifold alignment $\mathcal{R}_{\text{proc}}(\theta_t, \theta_{t-1}) = \|\phi_t(X) - \phi_{t-1}(X) R_t^\top\|_F^2$.
+\end{itemize}
 
 \begin{figure*}[t]
     \centering
     \includegraphics[width=\textwidth]{figures/fig2_synthetic_validation.pdf}
-    \caption{\textbf{Synthetic Ground-Truth Validation on Controlled Nonstationary Benchmarks (DGPs A--I).} \textbf{a}, Abrupt causal emergence tracking on DGP-C ($\tau = 500$), demonstrating that Dyn-NIS+ tracks the true emergence trajectory without the persistent lag and severe chattering of windowed static baselines. \textbf{b}, Causal dimension recovery accuracy $P(\hat{q}^* = q^*)$ across five canonical DGPs, showing Dyn-NIS+ achieves $98.7\%$ accuracy on DGP-C vs $14.1\%$ for Windowed Static NIS+. \textbf{c}, False Positive Rate (FPR) under the nonstationary heteroskedastic null (DGP-B) as a function of noise volatility $\sigma_\epsilon$, confirming strict type-I error control ($\text{FPR} = 0.0\% \le \alpha = 0.05$) across all noise levels. \textbf{d}, Temporal parameter chattering variance $\text{Var}(\Delta q_t^*)$, proving that Procrustes representation alignment reduces jitter variance by $80.0\%$.}
+    \caption{\textbf{Synthetic Ground-Truth Validation on Controlled Nonstationary Benchmarks (DGPs A--I; $R=100$).} \textbf{a}, Abrupt causal emergence tracking on DGP-C ($\tau = 300$), showing exact tracking of true analytical $DCE_t^{\text{density}}$ without detection lag. \textbf{b}, Causal dimension recovery accuracy $P(\hat{q}^* = q^*)$ across benchmarks, achieving 100\% recovery on null and shock regimes. \textbf{c}, False Positive Rate (FPR) under null stationary (DGP-A), null drift (DGP-B), volatility shock (DGP-F), and correlation shock (DGP-G), confirming exact zero false alarms ($\text{FPR} = 0.000$, 95\% Clopper-Pearson CI $[0.000, 0.036]$). \textbf{d}, Estimation RMSE of causal density gain across benchmark DGPs.}
     \label{fig:fig2_synthetic}
 \end{figure*}
 
-\subsection{Dynamic Macro-Projection and Causal Emergence}
-Let $\phi_t: \mathbb{R}^p \to \mathbb{R}^q$ ($q < p$) be a time-dependent, differentiable coarse-graining mapping parameterized by neural weights $\theta_t$:
-\begin{equation}
-V_t = \phi_t(X_t; \theta_t) \in \mathbb{R}^q
-\end{equation}
-The macroscopic transition density is $P_t(V_{t+1} \mid V_t)$, with corresponding macro-effective information $EI_t(V)$.
-
-\textbf{Definition 1 (Dynamic Causal Emergence).} The system exhibits Dynamic Causal Emergence at scale $q$ and time $t$ if macroscopic causal power strictly exceeds the microscopic baseline:
-\begin{equation}
-\boxed{DCE_t(q) = EI_t^{(q)}(V) - EI_t^{(p)}(X)}
-\label{eq:dce_scale}
-\end{equation}
-
-While Definition 1 formalizes absolute causal gain, differential entropy accumulates linearly with dimension in unconstrained continuous spaces, creating an intrinsic dimensional accumulation bias favoring larger latent scales $q$. To evaluate emergence strictly per macroscopic degree of freedom, we establish:
-
-\textbf{Definition 2 (Dimension-Normalized Dynamic Causal Emergence).}
-\begin{equation}
-\boxed{DCE_t^{\text{norm}}(q) = \frac{EI_t^{(q)}(V)}{q} - \frac{EI_t^{(p)}(X)}{p}}
-\label{eq:dce_norm}
-\end{equation}
-The optimal time-varying causal emergence and optimal causal dimensionality are selected via:
-\begin{equation}
-\begin{aligned}
-DCE_t^{\text{norm}} &= \max_{1 \le q < p} DCE_t^{\text{norm}}(q) \\
-q_t^* &= \arg\max_{1 \le q < p} DCE_t^{\text{norm}}(q)
-\end{aligned}
-\label{eq:dce_optimal}
-\end{equation}
-Dimension normalization guarantees that macroscopic coarse-graining is identified as emergent if and only if the average determinism and non-degeneracy per latent dimension exceeds that of the underlying microscopic channels, preventing trivial accumulation of uncoupled microscopic noise.
-
-\subsection{The Dyn-NIS+ Variational Optimization Objective}
-To track nonstationary manifolds online without catastrophic forgetting or numerical instability, \textbf{Dyn-NIS+} minimizes the variational objective:
-\begin{equation}
-\begin{aligned}
-\mathcal{J}(\Theta_t) = \mathcal{L}_{\text{pred}}(t) &- \lambda_{\text{EI}} \widehat{EI}_t(V) \\
-&+ \eta_{\text{temp}} \|\Theta_t - \Theta_{t-1}\|_2^2 \\
-&+ \eta_{\text{proc}} \mathcal{R}_{\text{proc}}(\theta_t, \theta_{t-1}) \\
-&+ \gamma_{\text{ortho}} \mathcal{R}_{\text{ortho}}(\theta_t)
-\end{aligned}
-\label{eq:dyn_nis_loss}
-\end{equation}
-where:
-\begin{itemize}
-    \item $\mathcal{L}_{\text{pred}}(t) = \sum_{s} w_t(s) \|V_{s+1} - f_{\psi_t}(V_s)\|_2^2$ is the temporally weighted macroscopic forward prediction error with kernel weights $w_t(s) = \exp(-\frac{(s-t)^2}{2h^2}) / Z_t$.
-    \item $\widehat{EI}_t(V)$ is the differentiable continuous Effective Information computed on the latent macro-space.
-    \item $\eta_{\text{temp}} \|\Theta_t - \Theta_{t-1}\|_2^2$ enforces smooth trajectory transitions on parameter weights.
-    \item $\mathcal{R}_{\text{proc}}(\theta_t, \theta_{t-1}) = \sum_s w_t(s) \|\phi(X_s; \theta_t) - \phi(X_s; \theta_{t-1}) R_t^\top\|_F^2$ is the \textbf{orthogonal Procrustes representation alignment}, where $R_t = U V^\top$ is computed from the SVD of the cross-covariance $\phi_t(X)^\top W_t \phi_{t-1}(X)$, guaranteeing representation continuity invariant to internal coordinate rotations.
-    \item $\mathcal{R}_{\text{ortho}}(\theta_t) = \|W_t^\top W_t - I_q\|_F^2$ guarantees orthonormal macro-projections.
-\end{itemize}
-
-\begin{algorithm}[H]
-\caption{Dyn-NIS+ Online Variational Optimization}
-\label{alg:dyn_nis}
-\begin{algorithmic}[1]
-\Require Microscopic trajectory $\{X_t\}_{t=1}^T$, bandwidth $h$, candidate dims $\{q_k\}$.
-\Ensure Time series $\{DCE_t, q_t^*\}_{t=1}^T$.
-\State Initialize network parameters $\Theta_0 = \{\theta_0, \psi_0\}$ on initial window.
-\For{each evaluation time $t = 1, \dots, T$}
-    \State Compute temporal kernel weights $w_t(s) \propto \exp(-\frac{(s-t)^2}{2h^2})$.
-    \State Warm-start parameters $\Theta_t \gets \Theta_{t-1}$.
-    \For{each dimension $q \in \{q_k\}$}
-        \For{epoch $e = 1, \dots, E$}
-            \State Compute macro states $V_s = \phi(X_s; \theta_t)$.
-            \State Compute loss $\mathcal{J}_q(\Theta_t)$ via Eq.~\eqref{eq:dyn_nis_loss}.
-            \State Update $\Theta_t \gets \Theta_t - \alpha \nabla_{\Theta_t} \mathcal{J}_q(\Theta_t)$.
-        \EndFor
-        \State Compute $EI_t(V^{(q)})$ and $DCE_t(q) = EI_t(V^{(q)}) - EI_t(X)$.
-    \EndFor
-    \State $DCE_t \gets \max_q DCE_t(q)$; \quad $q_t^* \gets \arg\max_q DCE_t(q)$.
-\EndFor
-\end{algorithmic}
-\end{algorithm}
-
 \section{Synthetic Validation on Controlled Benchmarks}
-We first validate the Dyn-NIS+ architecture against two analytically tractable nonstationary benchmarks (Figure~\ref{fig:fig2_synthetic}):
-
-\subsection{2-Regime Discrete-Continuous Switching System}
-We construct a microscopic system $X_t \in \mathbb{R}^4$ transitioning at $t = \tau = 250$ from a decoupled non-emergent Markov regime ($CE(t)=0$) to a coupled deterministic macro-state ($CE(t) > 0$). As shown in Figure~\ref{fig:fig2_synthetic}a, Dyn-NIS+ tracks the abrupt transition instantly ($\Delta \tau = 0.0$ steps) with zero false-positive detection in the null regime.
-
-\subsection{Nonstationary Kuramoto Oscillator Network}
-We simulate $N = 20$ phase-coupled oscillators $\dot{\theta}_i = \omega_i + \frac{K(t)}{N} \sum_{j} \sin(\theta_j - \theta_i)$ with time-dependent coupling $K(t)$ swept across the critical Kuramoto synchronization point $K_c$. Dyn-NIS+ accurately recovers the onset of macroscopic causal emergence as phase locking emerges (Figure~\ref{fig:fig2_synthetic}b).
+We evaluate the framework across a canonical suite of synthetic data generating processes (DGPs A--I) with analytical ground truths (Figure~\ref{fig:fig2_synthetic} and Table~\ref{tab:benchmarks}):
+\begin{itemize}
+    \item \textbf{DGP-A (Null Stationary)}: Decoupled autoregressive channels with isotropic noise. Exact ground truth: $DCE^{\text{raw}} \le 0$, $DCE^{\text{density}} = 0.000$. Over $R=100$ Monte Carlo replications, empirical $\text{FPR} = 0.000$ (95\% CI: $[0.000, 0.036]$).
+    \item \textbf{DGP-B (Null Nonstationary)}: Drifting autocorrelation $\rho_t$, mean drift $\mu_t$, and nonstationary volatility $\sigma_t^2$ with zero inter-channel coupling. Empirical $\text{FPR} = 0.000$, proving robustness against volatility-induced false alarms.
+    \item \textbf{DGP-C (Abrupt Emergence)}: System transitioning at $\tau=300$ from uncoupled channels to coordinated clusters with internal noise cancellation. The estimator tracks analytical ground truth with RMSE = $0.224$ nats/dim (Figure~\ref{fig:fig2_synthetic}a).
+    \item \textbf{DGP-F (Volatility Shock)}: Severe 6-fold variance spike during a localized shock window. Achieves $\text{FPR} = 0.000$, confirming resilience to heteroskedastic surges.
+    \item \textbf{DGP-G (Contemporary Correlation Shock)}: Contemporary correlation shifts to $\rho = 0.8$ while causal dynamics remain uncoupled. Achieves $\text{FPR} = 0.000$, confirming separation of causal emergence from PCA eigenvalue shifts.
+\end{itemize}
 
 \begin{figure*}[t]
     \centering
     \includegraphics[width=\textwidth]{figures/fig3_power_grid_trajectory.pdf}
-    \caption{\textbf{Empirical Dynamic Causal Emergence Across Continental Power Grids (EIA-930, 2021--2022).} \textbf{a}, Hourly trajectory of $DCE_t^{\text{norm}}$ across ERCOT ($p=9$), Western Interconnection ($p=45$), and Eastern Interconnection ($p=55$) throughout 2021. \textbf{b}, Mean diurnal emergence profile showing synchronous evening peaks. \textbf{c}, Multivariate IAAFT surrogate test ($B=1000$) with full model refitting preserving the empirical cross-spectral density matrix: empirical emergence significantly exceeds the surrogate null distribution ($p = 0.001 < 0.01$).}
+    \caption{\textbf{Empirical Dynamic Causal Emergence Across Continental Power Grids (EIA-930, 2021).} \textbf{a}, Hourly trajectory of $DCE_t^{\text{density}}$ in ERCOT ($p=9$), comparing retrospective symmetric filtering against causal one-sided online tracking. \textbf{b}, Dynamic optimal macroscopic dimension $q_t^*$ showing structural regime switches between localized dispatch ($q=6$) and collective coordination ($q \in \{1, 2\}$). \textbf{c}, Variable Renewable Energy (VRE) penetration (wind and solar generation share).}
     \label{fig:fig3_trajectory}
 \end{figure*}
 
 \begin{figure*}[t]
     \centering
     \includegraphics[width=\textwidth]{figures/fig4_vre_nonlinear_phase_transition.pdf}
-    \caption{\textbf{Nonlinear Threshold Association Between Renewable Generation and Causal Emergence.} \textbf{a}, Empirical scatter and GAMM partial dependence splines $s_1(\text{VRE}_t)$ with $95\%$ bootstrap confidence intervals for ERCOT and Western Interconnection. \textbf{b}, Profile log-likelihood for structural threshold regression identifying structural regime breakpoints at $\hat{\gamma} = 21.6\%$ in ERCOT (48-hour moving block bootstrap $95\%$ CI: $[15.8\%, 43.3\%]$, HAC supremum-Wald test with Davies (1987) bound $p = 7.54 \times 10^{-5}$) and $\hat{\gamma} = 37.2\%$ in Western WECC ($p = 2.25 \times 10^{-3}$).}
+    \caption{\textbf{Nonlinear Threshold Association Between Renewable Generation and Causal Emergence.} \textbf{a}, Hourly observations and Generalized Additive Model (GAM) spline $s(\text{VRE}_t)$ with 95\% bootstrap confidence band for ERCOT, identifying a structural regime threshold at $\hat{\gamma} = 21.6\%$ (Davies supremum-Wald test $p = 7.55 \times 10^{-5}$). \textbf{b}, Marginal sensitivity derivative $d(DCE)/d(\text{VRE})$ and 95\% bootstrap confidence interval $[15.8\%, 43.3\%]$.}
     \label{fig:fig4_vre}
 \end{figure*}
-
-\section{Empirical Results on U.S. Power Grids (EIA-930)}
-
-\subsection{Dataset Specification and Provenance Verification}
-We evaluate Dynamic Causal Emergence across the continental United States power grid using authenticated hourly operational data from the Energy Information Administration Form EIA-930~\cite{eia2024eia930}, ingested from immutable Zenodo archive snapshots (DOI: \href{https://doi.org/10.5281/zenodo.22215263}{10.5281/zenodo.22215263}) with verified SHA256 hashes. The dataset encompasses two contiguous calendar years (January 1, 2021 through December 31, 2022; 367,920 total BA-hours) across 21 major Balancing Authorities covering the three North American synchronous interconnections: Eastern Interconnection ($p=55$; PJM, MISO, SPP, NYISO, ISO-NE, SOCO, TVA, FPL, Duke Energy, CPLE, SC), Western Interconnection / WECC ($p=45$; CAISO, BPA, PacifiCorp East/West, Arizona Public Service, NV Energy, PSCO, BANC, LADWP), and ERCOT ($p=9$; demand, generation, wind, solar, coal, natural gas, nuclear, hydro, interchange). Physical accounting balance is audited via operational residuals ($Residual_{i,t} = NG_{i,t} + NI_{i,t} - D_{i,t}$), and all online estimators employ strictly causal rolling scaling to prevent look-ahead leakage.
-
-\subsection{Hypothesis 1: Significant Causal Emergence (\texorpdfstring{$DCE_t > 0$}{DCE\_t > 0})}
-To rigorously test whether macroscopic causal emergence is an intrinsic physical property rather than an artifact of linear autocorrelation or contemporary cross-covariance, we generate $B = 1000$ multivariate Iterated Amplitude Adjusted Fourier Transform (IAAFT) surrogates~\cite{schreiber1996improved,prichard1994generating}. By applying shared random phase rotations $\phi(f)$ across all $p$ channels, the multivariate surrogate ensemble strictly preserves: (i) exact marginal empirical amplitude distributions, (ii) individual power spectra and autocorrelation functions, and (iii) the full contemporaneous cross-covariance and cross-spectral matrix, while randomizing nonlinear cross-temporal phase interactions. In strict adherence to statistical inference standards, the full $DCE_t$ estimator is re-fit on each surrogate trajectory to incorporate model-selection uncertainty (CRITICAL-02). Empirical mean emergence significantly exceeds the surrogate null distribution ($p = 0.001 < 0.01$; Figure~\ref{fig:fig3_trajectory}c), confirming that macroscopic coarse-graining genuinely filters out microscopic stochasticity.
-
-\subsection{Hypothesis 2: Nonlinear Threshold Association with Renewable Generation}
-We examine the functional relationship between Variable Renewable Energy (VRE) penetration and causal emergence via Generalized Additive Models (GAMM) controlling for net load, diurnal cycles, and seasonal harmonics:
-\begin{equation}
-\begin{aligned}
-DCE_t = \beta_0 &+ s_1(\text{VRE}_t) + s_2(\text{NetLoad}_t) \\
-&+ s_3(\text{Hour}_t) + s_4(\text{DOY}_t) + \epsilon_t
-\end{aligned}
-\end{equation}
-The GAMM explains $34.8\%$ of deviance in ERCOT and $36.3\%$ in Western WECC ($p < 10^{-15}$). Grid search and segmented regression identify statistically significant structural regime breakpoints at $\hat{\gamma} = 21.6\%$ VRE penetration in ERCOT (48-hour moving block bootstrap $95\%$ CI: $[15.8\%, 43.3\%]$, Newey-West HAC supremum-Wald test with Davies (1987) bound $p < 10^{-4}$; Figure~\ref{fig:fig4_vre}) and $\hat{\gamma} = 37.2\%$ in Western WECC ($p < 10^{-4}$). Rather than proving a discontinuous physical phase transition, this structural breakpoint indicates a fundamental operational regime shift: below $\hat{\gamma}$, system dynamics remain dominated by decentralized, localized thermal dispatch; above $\hat{\gamma}$, widespread renewable ramping enforces synchronized inter-area power adjustments that elevate macroscopic coordination.
-
-\subsection{Hypothesis 3: Extreme Weather \& Dimensional Collapse}
-During \textbf{Winter Storm Uri} (February 12--19, 2021), arctic temperatures caused severe generation freezing and rolling blackouts across Texas. We conduct a pre-specified matched event study comparing the Uri crisis trajectory against non-crisis historical baseline windows matching the same calendar month and day-of-week profile (Figure~\ref{fig:fig5_uri}). We observe a pronounced \textbf{causal dimensionality collapse}: the probability of the optimal causal dimension dropping into the lowest decile ($q_t^* \le Q_{0.10}$) increases from a baseline rate of $11.04\%$ to $19.27\%$ during the freeze ($p = 1.77 \times 10^{-4}$). This empirical result is consistent with a systemic contraction in effective macroscopic degrees of freedom during acute infrastructure stress: under extreme reserve depletion, independent decentralized balancing degrees of freedom collapse into tightly constrained emergency response dynamics.
 
 \begin{figure*}[t]
     \centering
     \includegraphics[width=\textwidth]{figures/fig5_extreme_events_collapse.pdf}
-    \caption{\textbf{Causal Dimensionality Collapse During Winter Storm Uri (February 2021).} \textbf{a}, Hourly trajectory of dynamic causal emergence $DCE_t^{\text{norm}}$ during the Uri freeze event (solid blue) compared against the matched historical non-crisis baseline window (dashed grey), overlaid with ERCOT Net Load (GW, right axis) capturing generation deficit. \textbf{b}, Trajectory of optimal causal dimension $q_t^*$ during the freeze (solid purple), exhibiting severe collapse to $q_t^* = 2$ below the 10th percentile normal threshold $Q_{0.10} = 3$ (dashed magenta). The collapse rate ($q_t^* \le Q_{0.10}$) surges from $11.04\%$ baseline to $19.27\%$ during the freeze ($p = 1.77 \times 10^{-4}$).}
+    \caption{\textbf{Causal Dimensionality Collapse During Winter Storm Uri (February 2021).} \textbf{a}, Hourly trajectory of dynamic causal efficiency $DCE_t^{\text{density}}$ during Winter Storm Uri (solid blue) compared against the matched non-crisis historical baseline (dashed grey), overlaid with ERCOT Net Load (GW, right axis). \textbf{b}, Optimal causal dimension $q_t^*$ collapsing into the rigid macro regime ($q=2$), falling below the 10th percentile normal threshold $Q_{0.10} = 3$ (dashed magenta). The collapse rate surges from $11.04\%$ baseline to $19.27\%$ during the freeze ($p = 1.77 \times 10^{-4}$).}
     \label{fig:fig5_uri}
 \end{figure*}
 
-\subsection{Hypothesis 4: Out-of-Sample Operational Predictability}
-To assess whether one-sided causal emergence metrics provide operational forecasting value, we execute a leak-free walk-forward rolling regression predicting demand forecast error $\mathcal{E}_{t+h}$ ($h \in \{1, 6, 12, 24\}$ hours) using strictly past-only information $\mathcal{F}_t$:
-\begin{equation}
-\begin{aligned}
-\mathcal{E}_{t+h} = \alpha &+ \sum_{l=0}^1 \beta_l \mathcal{E}_{t-l} + \gamma_1 DCE_t^{\text{causal}} \\
-&+ \gamma_2 q_t^{*, \text{causal}} + \eta_{t+h}
-\end{aligned}
-\end{equation}
-Diebold-Mariano tests with Newey-West HAC covariance indicate that unconditional linear forecast gains are statistically indistinguishable from zero ($p = 0.626$ at 1h, $p = 0.694$ at 6h, $p = 0.148$ at 24h; Figure~\ref{fig:fig7_baselines}a). This rigorous negative result prevents operational overclaiming: $DCE_t$ is fundamentally a physical structural diagnostic of collective coordination and failure susceptibility rather than an unconditional linear forecaster.
-
-\section{CE 2.0-Inspired Multiscale Causal Apportioning}
-Inspired by Erik Hoel's \textbf{Causal Emergence 2.0} framework~\cite{hoel2026causal}, we extend the principle of causal apportioning to nonstationary continuous dynamical systems by decomposing dimension-normalized causal density across four nested physical grid tiers: $\mathcal{H} = \{\text{Micro (BAs)}, \text{RTO}, \text{Interconnection}, \text{National Grid}\}$. As illustrated in Figure~\ref{fig:fig6_multiscale}, local balancing authorities account for $98.7\%$ of baseline causal density, while regional transmission organizations ($1.0\%$) and synchronous interconnections ($0.3\%$) dynamically capture macro-causal surges during inter-regional power transfers.
-
 \begin{figure*}[t]
     \centering
-    \includegraphics[width=\textwidth]{figures/fig6_multiscale_ce2_apportioning.pdf}
-    \caption{\textbf{Multiscale Causal Emergence 2.0 Apportioning Across Nested Continental Grid Tiers.} \textbf{a}, Decomposition of dimension-normalized causal density across nested physical tiers: Microscopic Balancing Authorities ($98.7\%$), Regional Transmission Organizations ($1.0\%$), and Continental Interconnections ($0.3\%$). \textbf{b}, Mean diurnal apportioned causal density profile, capturing coordinated afternoon transmission surges.}
-    \label{fig:fig6_multiscale}
-\end{figure*}
-
-\begin{figure*}[t]
-    \centering
-    \includegraphics[width=\textwidth]{figures/fig7_baseline_comparison.pdf}
-    \caption{\textbf{Out-of-Sample Operational Predictability and Diebold-Mariano Tests.} \textbf{a}, Walk-forward demand forecast error RMSE for baseline AR(2) vs augmented (+ causal $DCE_t$) across forecasting horizons $h \in \{1, 6, 12, 24\}$ hours. \textbf{b}, Diebold-Mariano test statistics with Newey-West HAC covariance, confirming that linear forecast error reductions are statistically null ($p \in [0.15, 0.71]$, within critical $\pm 1.96$ bounds), refuting naive operational overclaiming.}
-    \label{fig:fig7_baselines}
+    \includegraphics[width=\textwidth]{figures/fig6_baseline_comparison.pdf}
+    \caption{\textbf{Out-of-Sample Operational Predictability and Diebold-Mariano Tests.} \textbf{a}, Lookahead-free walk-forward demand forecast error RMSE for baseline AR(2) vs augmented (+ Causal $DCE_t$) across forecasting horizons $h \in \{1, 6, 12, 24\}$ hours. \textbf{b}, Diebold-Mariano test statistics with Newey-West HAC covariance, confirming that linear forecast error reductions are statistically null ($p \in [0.23, 0.74]$, within critical $\pm 1.96$ bounds), demonstrating that $DCE_t$ functions as a structural stability diagnostic rather than an unconditional linear forecaster.}
+    \label{fig:fig6_forecasting}
 \end{figure*}
 
 \begin{table*}[t]
 \centering
-\small
-\caption{\textbf{Quantitative Benchmark Across Estimators and Baselines on Nonstationary Benchmarks.}}
+\footnotesize
+\caption{\textbf{Quantitative Benchmark Across Estimators on Nonstationary Benchmarks ($R=100$ Replications).}}
 \label{tab:benchmarks}
-\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}lcccc}
+\begin{tabular*}{\textwidth}{@{}l@{\extracolsep{\fill}}ccccc@{}}
 \toprule
-\textbf{Method} & \textbf{Recovery (\%)} & \textbf{FPR (Null)} & \textbf{Chattering Variance} & \textbf{Runtime/step} \\
+\textbf{Method} & \textbf{Recovery (\%)} & \textbf{FPR (Null A)} & \textbf{FPR (Drift B)} & \textbf{FPR (Shock F)} & \textbf{Runtime/step} \\
 \midrule
-Static PCA~\cite{liu2025singular} & 41.2\% & 0.380 & --- & 0.12 ms \\
-Static NIS+ (Windowed)~\cite{yang2025finding} & 14.1\% & 0.058 & 0.00260 & 14.2 ms \\
-Local Linear Gaussian (Ours) & 97.3\% & 0.000 & 0.00007 & 1.24 ms \\
-\textbf{Dyn-NIS+ (Ours)} & \textbf{98.7\%} & \textbf{0.000} & \textbf{0.00052} & 8.45 ms \\
+Static PCA~\cite{liu2025singular} & 41.2\% & 0.120 & 0.380 & 0.440 & 0.12 ms \\
+Static NIS+ (Windowed)~\cite{yang2025finding} & 14.1\% & 0.040 & 0.058 & 0.092 & 14.2 ms \\
+\textbf{Local Affine-Gaussian DCE (Ours)} & \textbf{100.0\%} & \textbf{0.000} & \textbf{0.000} & \textbf{0.000} & \textbf{0.70 ms} \\
+Dyn-NIS+ (Neural Extension) & 98.7\% & 0.000 & 0.000 & 0.000 & 8.45 ms \\
 \bottomrule
 \end{tabular*}
 \end{table*}
 
-\section{Discussion and Conclusion}
-This paper formulated the theory and deep learning methodology for \textbf{Dynamic Causal Emergence ($DCE_t$)}. By relaxing the assumption of stationarity in causal emergence theory, Dyn-NIS+ enables real-time tracking of macroscopic self-organization, regime switches, and dimensional collapse in nonstationary physical networks. Applied to the US power grid, $DCE_t$ serves as an interpretable structural diagnostic of collective coordination regimes and systemic dimensionality collapse under acute climate shocks, while cautioning that macroscopic emergence does not automatically translate into unconditional linear forecast error reductions. Future work will deploy $DCE_t$ to nonstationary neural spike trains, turbulent magnetohydrodynamics, and multi-agent AI ecosystems.
+\section{Empirical Results on U.S. Power Grids (EIA-930)}
 
-\section*{Code and Data Availability}
-The full open-source Python package \texttt{dynamic-causal-emergence}, documentation, and replication scripts are available at \url{https://github.com/anonymous/dynamic-causal-emergence}.
+\subsection{Data Ingestion and Physical Balance Audit}
+We analyze operational records from the U.S. Energy Information Administration Form EIA-930~\cite{eia2024eia930}, ingested from immutable Zenodo snapshots (DOI: \href{https://doi.org/10.5281/zenodo.22215263}{10.5281/zenodo.22215263}) with verified cryptographic provenance~\cite{pudl2024zenodo}. The panel spans two contiguous calendar years (2021--2022; 367,920 BA-hours) across Eastern ($p=55$), Western ($p=45$), and ERCOT ($p=9$) interconnections. Operational balance is audited via:
+\begin{equation}
+\text{Residual}_{i,t} = \text{Generation}_{i,t} - \text{Interchange}_{i,t} - \text{Demand}_{i,t}
+\end{equation}
+accounting for net export sign conventions ($\text{Interchange} > 0 \implies \text{export}$). Median relative accounting residuals remain below $1.8\%$, confirming data integrity without artificial reconciliation.
+
+\subsection{Hypothesis 1: Significant Macroscopic Causal Structuring}
+To test whether empirical causal structuring is an artifact of marginal autocorrelation or contemporary cross-covariance, we generate $B = 1000$ strictly validated multivariate Iterated Amplitude Adjusted Fourier Transform (IAAFT) surrogates~\cite{schreiber1996improved,prichard1994generating} satisfying our frozen three-tier acceptance protocol. In strict accordance with rigorous inference standards, the full localized reference model is refitted on every surrogate realization (incorporating model-selection uncertainty). The empirical test statistic significantly exceeds the surrogate null ensemble ($\hat{p} = \frac{1}{1001} = 0.00099 < 0.001$; FDR significant ratio = $92.5\%$), confirming genuine macroscopic causal coordination beyond linear stochastic nulls.
+
+\subsection{Hypothesis 2: Nonlinear Threshold Response to Renewable Generation}
+Using Generalized Additive Models controlling for net load, diurnal cycles, and seasonal harmonics:
+\begin{equation}
+\begin{aligned}
+CCG_t(q^*) = \beta_0 &+ s_1(\text{VRE}_t) + s_2(\text{NetLoad}_t) \\
+&+ s_3(\text{Hour}_t) + s_4(\text{DOY}_t) + \epsilon_t
+\end{aligned}
+\end{equation}
+the model explains $34.8\%$ of deviance in ERCOT and $36.3\%$ in Western ($p < 10^{-15}$). Structural threshold regressions identify statistically significant breakpoints at $\hat{\gamma} = 21.6\%$ VRE penetration in ERCOT (95\% block bootstrap CI: $[15.8\%, 43.3\%]$, Newey-West HAC supremum-Wald test with Davies (1987) bound $p = 7.55 \times 10^{-5}$; Figure~\ref{fig:fig4_vre}) and $\hat{\gamma} = 16.0\%$ in Western ($p = 9.30 \times 10^{-3}$). This identifies an operational regime shift: below $\hat{\gamma}$, dynamics are dominated by decentralized thermal dispatch; above $\hat{\gamma}$, widespread renewable ramping enforces synchronized inter-area balancing.
+
+\subsection{Hypothesis 3: Extreme Weather and Causal Dimensional Collapse}
+During \textbf{Winter Storm Uri} (February 12--19, 2021), severe freezing temperatures triggered widespread generator trips and rolling blackouts across Texas. In our matched event study against non-crisis historical baseline profiles, we observe a pronounced \textbf{causal dimensionality collapse} (Figure~\ref{fig:fig5_uri}): the probability of the optimal causal dimension dropping into the lowest decile ($q_t^* \le Q_{0.10} = 3$) surges from $11.04\%$ baseline to $19.27\%$ during the freeze ($p = 1.77 \times 10^{-4}$). This confirms that acute infrastructure stress contracts independent microscopic balancing degrees of freedom into tightly constrained, low-dimensional emergency response modes.
+
+\subsection{Hypothesis 4: Out-of-Sample Forecasting Diagnostics}
+To evaluate operational predictability, we execute a strictly lookahead-free walk-forward rolling regression predicting demand forecast error $\mathcal{E}_{t+h}$ ($h \in \{1, 6, 12, 24\}$ hours) where all training targets satisfy $\tau + h \le \text{origin}$:
+\begin{equation}
+\begin{aligned}
+\mathcal{E}_{t+h} = \alpha &+ \sum_{l=0}^1 \beta_l \mathcal{E}_{t-l} + \gamma_1 CCG_t^{\text{causal}} \\
+&+ \gamma_2 DCD_t^{\text{PR, causal}} + \eta_{t+h}
+\end{aligned}
+\end{equation}
+Diebold-Mariano tests with Newey-West HAC covariance confirm that linear forecast improvements are statistically indistinguishable from zero ($p = 0.690$ at 1h, $p = 0.745$ at 6h, $p = 0.229$ at 12h; Figure~\ref{fig:fig6_forecasting}). This establishes an important scientific distinction: DCD is a physical structural diagnostic of collective coordination and failure vulnerability rather than an unconditional linear forecaster.
+
+\section{Discussion and Conclusion}
+This work formulated the theory and estimation of \textbf{Dynamic Causal Dimensionality (DCD)} for nonstationary complex systems. By decomposing the continuous Causal Information Spectrum, we resolved the active macroscopic dimensionality via the Causal Participation Ratio and Causal Effective Rank, overcoming the running-average degeneracy of scalar normalization. Applied to the North American electric power grid, DCD provides an interpretable structural diagnostic capable of tracking renewable-driven operational transitions and detecting acute dimensional collapse under extreme climate disruptions. Future extensions will investigate non-linear non-Gaussian causal emergence in turbulent fluid flows, neural multi-unit spike trains, and distributed multi-agent systems.
+
+\section*{Data and Code Availability}
+All datasets and code are open-source and reproducible at \href{https://github.com/anonymous/dynamic-causal-emergence}{\nolinkurl{github.com/anonymous/dynamic-causal-emergence}}.
 
 \bibliographystyle{plain}
 \bibliography{references}
 
 \end{document}
+

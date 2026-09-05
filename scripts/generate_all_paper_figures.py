@@ -1,15 +1,18 @@
 """
 Master Figure Generation Script for Q1 Manuscript.
 
-Generates Figures 2 to 7 exclusively from validated, immutable experimental artifacts:
-- results/synthetic/mc_*.json
+Generates Figures 1 to 6 exclusively from validated, genuine experimental artifacts:
+- results/synthetic/mc_benchmark_consolidated_linear_gaussian.json
 - results/empirical/ercot_dce_2021_retrospective.parquet
+- results/empirical/ercot_dce_2021_causal.parquet
 - results/empirical/western_dce_2021_retrospective.parquet
+- results/empirical/eastern_dce_2021_retrospective.parquet
 - results/empirical/h1_surrogate_results.json
 - results/empirical/h2_gamm_results.json
 - results/empirical/h3_event_study_results.json
 - results/empirical/h4_forecast_results.json
-- results/empirical/ce2_apportioning_2021.parquet
+
+Zero mock or hard-coded curves. All plots draw directly from data.
 """
 
 import os
@@ -21,75 +24,88 @@ import matplotlib.gridspec as gridspec
 
 from dce.visualization.style import apply_nature_style, COLORS
 from dce.visualization.figures import generate_figure_1_conceptual_framework
+from dce.datasets.synthetic import get_synthetic_benchmark
+from dce.estimators.linear_gaussian import LocalLinearGaussianDCE
 
 
 def generate_figure_2_synthetic(output_path: str = "paper/figures/fig2_synthetic_validation.pdf"):
-    """Regenerate Figure 2 from Monte Carlo synthetic benchmark results."""
+    """Generate Figure 2 directly from Monte Carlo results and analytical benchmark."""
     apply_nature_style()
     fig = plt.figure(figsize=(7.2, 4.8))
     gs = gridspec.GridSpec(2, 2, figure=fig, hspace=0.35, wspace=0.28)
     
-    # Panel A: Abrupt Emergence tracking (DGP-C)
-    ax1 = fig.add_subplot(gs[0, 0])
-    with open("results/synthetic/mc_delay_comparison.json", "r") as f:
-        comp = json.load(f)
+    # 1. Load MC consolidated summary
+    mc_path = "results/synthetic/mc_benchmark_consolidated_linear_gaussian.json"
+    with open(mc_path, "r") as f:
+        mc_summary = json.load(f)
         
-    t_axis = np.linspace(0, 1000, 200)
-    true_dce = np.where(t_axis >= 500, 0.42, 0.0)
-    dyn_dce = np.where(t_axis >= 500, 0.41 + 0.02 * np.sin(t_axis/40.0), -0.01 + 0.01 * np.cos(t_axis/30.0))
-    static_dce = np.where(t_axis >= 500, 0.38 + 0.06 * np.sin(t_axis/15.0), 0.03 + 0.05 * np.cos(t_axis/10.0))
+    # Panel A: Real simulation of DGP-C (Abrupt Emergence) with analytical ground truth
+    ax1 = fig.add_subplot(gs[0, 0])
+    dgp_c = get_synthetic_benchmark("dgp_c", n_steps=600, transition_t=300, p_dim=8, q_dim=2, seed=42)
+    model_c = LocalLinearGaussianDCE(macro_dims=[1, 2, 4, 8], bandwidth=24.0, causal_only=False)
+    model_c.fit(dgp_c.states)
     
-    ax1.plot(t_axis, true_dce, color=COLORS["neutral_grey"], ls="--", lw=1.5, label="Ground Truth DCE")
-    ax1.plot(t_axis, dyn_dce, color=COLORS["primary_blue"], lw=1.5, label="Dyn-NIS+ (Proposed)")
-    ax1.plot(t_axis, static_dce, color=COLORS["accent_yellow"], lw=1.0, alpha=0.8, label="Static Windowed NIS+")
-    ax1.axvline(500, color=COLORS["accent_orange"], ls=":", lw=1.2, label=r"Transition $\tau=500$")
-    ax1.set_title("a | Abrupt Causal Emergence (DGP-C)", fontweight="bold", loc="left")
+    t_eval = np.arange(len(model_c.optimal_dce_density_))
+    ax1.plot(t_eval, dgp_c.true_dce_density[:len(t_eval)], color=COLORS["neutral_grey"], ls="--", lw=1.5, label="Ground Truth $DCE^{\\text{density}}$")
+    ax1.plot(t_eval, model_c.optimal_dce_density_, color=COLORS["primary_blue"], lw=1.5, label="LocalAffineGaussianDCE")
+    ax1.axvline(300, color=COLORS["accent_orange"], ls=":", lw=1.2, label=r"Transition $\tau=300$")
+    ax1.set_title("a | Abrupt Causal Emergence Tracking (DGP-C)", fontweight="bold", loc="left")
     ax1.set_xlabel("Time step t")
-    ax1.set_ylabel("DCE (nats)")
+    ax1.set_ylabel(r"$DCE_t^{\text{density}}$ (nats/dim)")
     ax1.legend(loc="upper left", frameon=True, fontsize=6.5)
     ax1.grid(True)
     
     # Panel B: Dimension Recovery Accuracy across DGPs
     ax2 = fig.add_subplot(gs[0, 1])
-    dgps = ["DGP-A\n(Null Stat)", "DGP-B\n(Null Nonstat)", "DGP-C\n(Abrupt)", "DGP-E\n(Dim Shift)", "DGP-F\n(Shock)"]
-    acc_dyn = [100.0, 100.0, 98.7, 74.9, 100.0]
-    acc_static = [82.0, 68.4, 14.1, 41.2, 58.0]
+    dgp_keys = ["dgp_a", "dgp_b", "dgp_c", "dgp_e", "dgp_f"]
+    dgp_labels = ["DGP-A\n(Null Stat)", "DGP-B\n(Null Nonstat)", "DGP-C\n(Abrupt)", "DGP-E\n(Dim Shift)", "DGP-F\n(Shock)"]
+    acc_raw = [mc_summary[k]["mean_dim_accuracy_raw"] * 100.0 for k in dgp_keys]
     
-    x = np.arange(len(dgps))
-    w = 0.35
-    ax2.bar(x - w/2, acc_dyn, width=w, color=COLORS["primary_blue"], label="Dyn-NIS+")
-    ax2.bar(x + w/2, acc_static, width=w, color=COLORS["accent_yellow"], label="Static Windowed")
+    x = np.arange(len(dgp_keys))
+    w = 0.45
+    ax2.bar(x, acc_raw, width=w, color=COLORS["primary_blue"], label="Dimension Recovery ($q^*$)")
     ax2.set_title(r"b | Dimension Recovery Accuracy $P(\hat{q}^* = q^*)$", fontweight="bold", loc="left")
     ax2.set_xticks(x)
-    ax2.set_xticklabels(dgps)
+    ax2.set_xticklabels(dgp_labels)
     ax2.set_ylabel("Accuracy (%)")
     ax2.set_ylim(0, 115)
     ax2.legend(loc="upper right", frameon=True, fontsize=6.5)
     ax2.grid(axis="y")
     
-    # Panel C: False Positive Rate under Null Nonstationarity
+    # Panel C: False Positive Rate under Null Conditions with Clopper-Pearson 95% CIs
     ax3 = fig.add_subplot(gs[1, 0])
-    noise_sigmas = [0.1, 0.2, 0.3, 0.4, 0.5]
-    fpr_dce = [0.00, 0.00, 0.00, 0.00, 0.00]
-    fpr_pca = [0.12, 0.18, 0.24, 0.31, 0.38]
-    ax3.plot(noise_sigmas, fpr_dce, marker="o", color=COLORS["primary_blue"], lw=1.5, label="Local DCE (Ours)")
-    ax3.plot(noise_sigmas, fpr_pca, marker="s", color="firebrick", lw=1.2, ls="--", label="Static PCA Baseline")
+    null_keys = ["dgp_a", "dgp_b", "dgp_f", "dgp_g"]
+    null_labels = ["DGP-A\n(Stationary)", "DGP-B\n(Drift/Var)", "DGP-F\n(Vol Shock)", "DGP-G\n(Corr Shock)"]
+    fpr_raw = [mc_summary[k]["fpr_raw"] for k in null_keys]
+    ci_raw_low = [mc_summary[k]["fpr_raw_ci95"][0] for k in null_keys]
+    ci_raw_high = [mc_summary[k]["fpr_raw_ci95"][1] for k in null_keys]
+    
+    x_null = np.arange(len(null_keys))
+    yerr = [np.array(fpr_raw) - np.array(ci_raw_low), np.array(ci_raw_high) - np.array(fpr_raw)]
+    ax3.errorbar(x_null, fpr_raw, yerr=yerr, fmt="o", color=COLORS["primary_blue"], ecolor=COLORS["primary_blue"], elinewidth=1.5, capsize=4, label="Raw Emergence FPR (95% CI)")
     ax3.axhline(0.05, color="grey", ls=":", lw=1.0, label=r"Nominal $\alpha = 0.05$")
-    ax3.set_title("c | False Positive Rate under Null (DGP-B)", fontweight="bold", loc="left")
-    ax3.set_xlabel(r"Noise Volatility $\sigma_\epsilon$")
+    ax3.set_title("c | False Positive Rate under Nulls (R=100)", fontweight="bold", loc="left")
+    ax3.set_xticks(x_null)
+    ax3.set_xticklabels(null_labels)
     ax3.set_ylabel("False Positive Rate (FPR)")
-    ax3.set_ylim(-0.02, 0.45)
-    ax3.legend(loc="upper left", frameon=True, fontsize=6.5)
+    ax3.set_ylim(-0.02, 0.15)
+    ax3.legend(loc="upper right", frameon=True, fontsize=6.5)
     ax3.grid(True)
     
-    # Panel D: Temporal Chattering / Jitter Variance
+    # Panel D: Estimation RMSE across DGPs
     ax4 = fig.add_subplot(gs[1, 1])
-    methods = ["Static Windowed", "Dyn-NIS+\n(Smoothness)", "Dyn-NIS+\n(+ Procrustes)"]
-    r = comp["results"]
-    jitter = [r["static_nis_windowed"]["chattering_variance"] * 1000, 0.98, r["dyn_nis"]["chattering_variance"] * 1000]
-    ax4.bar(methods, jitter, color=[COLORS["accent_yellow"], COLORS["accent_green"], COLORS["primary_blue"]], width=0.55)
-    ax4.set_title("d | Temporal Chattering Variance", fontweight="bold", loc="left")
-    ax4.set_ylabel(r"$\text{Var}(\Delta q_t^*) \times 10^{-3}$")
+    eval_dgps = ["dgp_a", "dgp_b", "dgp_c", "dgp_d", "dgp_f"]
+    rmse_vals = [mc_summary[k]["mean_rmse_density"] for k in eval_dgps]
+    std_vals = [mc_summary[k]["std_rmse_density"] for k in eval_dgps]
+    dgp_eval_labels = ["DGP-A", "DGP-B", "DGP-C", "DGP-D", "DGP-F"]
+    
+    x_eval = np.arange(len(eval_dgps))
+    ax4.bar(x_eval, rmse_vals, yerr=std_vals, width=0.45, color=COLORS["accent_green"], capsize=4, label="RMSE ($DCE^{\\text{density}}$)")
+    ax4.set_title(r"d | Tracking Error Across Benchmark DGPs", fontweight="bold", loc="left")
+    ax4.set_xticks(x_eval)
+    ax4.set_xticklabels(dgp_eval_labels)
+    ax4.set_ylabel("RMSE (nats/dim)")
+    ax4.legend(loc="upper right", frameon=True, fontsize=6.5)
     ax4.grid(axis="y")
     
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
@@ -104,19 +120,15 @@ def generate_figure_3_grid(output_path: str = "paper/figures/fig3_power_grid_tra
     df_ercot = pd.read_parquet("results/empirical/ercot_dce_2021_retrospective.parquet")
     df_causal = pd.read_parquet("results/empirical/ercot_dce_2021_causal.parquet")
     
-    with open("results/empirical/h1_surrogate_results.json", "r") as f:
-        h1 = json.load(f)
-        
     fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(7.2, 5.6), sharex=True, gridspec_kw={"height_ratios": [1.2, 0.9, 0.9], "hspace": 0.18})
-    
     ts = pd.to_datetime(df_ercot["timestamp"])
     
     # Panel A: DCE Retrospective vs Causal
-    ax1.plot(ts, df_ercot["dce_norm"], color=COLORS["primary_blue"], lw=1.1, label=r"Retrospective $DCE_t^{\text{norm}}$")
-    ax1.plot(ts, df_causal["dce_norm"], color=COLORS["accent_yellow"], lw=0.9, alpha=0.85, label=r"Causal Online $DCE_t^{\text{norm}}$")
+    ax1.plot(ts, df_ercot["dce_density"], color=COLORS["primary_blue"], lw=1.1, label=r"Retrospective $DCE_t^{\text{density}}$")
+    ax1.plot(ts, df_causal["dce_density"], color=COLORS["accent_yellow"], lw=0.9, alpha=0.85, label=r"Causal Online $DCE_t^{\text{density}}$")
     ax1.axhline(0.0, color="grey", ls="--", lw=0.8)
     ax1.set_title("a | Dynamic Causal Emergence in ERCOT Interconnection (2021)", fontweight="bold", loc="left")
-    ax1.set_ylabel(r"$DCE_t^{\text{norm}}$ (nats)")
+    ax1.set_ylabel(r"$DCE_t^{\text{density}}$ (nats/dim)")
     ax1.legend(loc="upper right", frameon=True, fontsize=6.8)
     ax1.grid(True)
     
@@ -161,14 +173,14 @@ def generate_figure_4_vre_response(output_path: str = "paper/figures/fig4_vre_no
     # Panel A: GAM partial dependence
     df_ercot = pd.read_parquet("results/empirical/ercot_dce_2021_retrospective.parquet")
     sub_idx = np.linspace(0, len(df_ercot) - 1, 600, dtype=int)
-    ax1.scatter(df_ercot["vre_penetration"].values[sub_idx] * 100, df_ercot["dce_norm"].values[sub_idx],
+    ax1.scatter(df_ercot["vre_penetration"].values[sub_idx] * 100, df_ercot["dce_density"].values[sub_idx],
                 color=COLORS["primary_blue"], alpha=0.15, s=6, label="Hourly Obs")
     ax1.plot(vre_grid, p_dep, color=COLORS["accent_orange"], lw=2.0, label=r"GAM Spline $s(\text{VRE})$")
     ax1.fill_between(vre_grid, confi[:, 0], confi[:, 1], color=COLORS["accent_orange"], alpha=0.25, label="95% CI")
     ax1.axvline(gamma, color="firebrick", ls="--", lw=1.4, label=f"Threshold $\hat{{\gamma}}={gamma:.1f}\\%$")
     ax1.set_title("a | Nonlinear Causal Response to VRE (ERCOT)", fontweight="bold", loc="left")
     ax1.set_xlabel("Renewable Penetration VRE (%)")
-    ax1.set_ylabel(r"Partial Effect on $DCE_t^{\text{norm}}$")
+    ax1.set_ylabel(r"Partial Effect on $DCE_t^{\text{density}}$")
     ax1.legend(loc="upper left", frameon=True, fontsize=6.5)
     ax1.grid(True)
     
@@ -199,7 +211,6 @@ def generate_figure_5_uri(output_path: str = "paper/figures/fig5_extreme_events_
     ts = pd.to_datetime(h3["event_timestamps"])
     event_dce = np.array(h3["event_dce"])
     matched_dce = np.array(h3["matched_dce_mean"])
-    delta_q = np.array(h3["delta_q_star"])
     
     df_ercot = pd.read_parquet("results/empirical/ercot_dce_2021_retrospective.parquet")
     df_ercot["ts"] = pd.to_datetime(df_ercot["timestamp"])
@@ -212,7 +223,7 @@ def generate_figure_5_uri(output_path: str = "paper/figures/fig5_extreme_events_
     ax1.plot(ts, event_dce, color=COLORS["primary_blue"], lw=1.5, label="Event DCE (Uri)")
     ax1.plot(ts, matched_dce, color=COLORS["neutral_grey"], ls="--", lw=1.2, label="Matched Baseline Non-Event")
     ax1.set_title("a | Winter Storm Uri (Feb 12–19, 2021): Causal Dynamics", fontweight="bold", loc="left")
-    ax1.set_ylabel(r"$DCE_t^{\text{norm}}$ (nats)", color=COLORS["primary_blue"])
+    ax1.set_ylabel(r"$DCE_t^{\text{density}}$ (nats/dim)", color=COLORS["primary_blue"])
     ax1.legend(loc="upper left", frameon=True, fontsize=6.5)
     ax1.grid(True)
     
@@ -235,39 +246,8 @@ def generate_figure_5_uri(output_path: str = "paper/figures/fig5_extreme_events_
     print(f"Generated {output_path}")
 
 
-def generate_figure_6_ce2(output_path: str = "paper/figures/fig6_multiscale_ce2_apportioning.pdf"):
-    """Regenerate Figure 6 from CE 2.0 multiscale apportioning results."""
-    apply_nature_style()
-    df_ce2 = pd.read_parquet("results/empirical/ce2_apportioning_2021.parquet")
-    ts = pd.to_datetime(df_ce2["timestamp"])
-    
-    fig, ax = plt.subplots(figsize=(7.2, 3.4))
-    
-    # Plot weekly smoothed apportioned causality shares
-    total = np.maximum(df_ce2["total_causality"].values, 1e-4)
-    share_micro = df_ce2["apportioned_micro"].rolling(168, min_periods=24).mean().values / total * 100
-    share_rto = df_ce2["apportioned_rto"].rolling(168, min_periods=24).mean().values / total * 100
-    share_inter = df_ce2["apportioned_interconnection"].rolling(168, min_periods=24).mean().values / total * 100
-    
-    # Stackplot
-    ax.plot(ts, df_ce2["apportioned_micro"], color=COLORS["primary_blue"], lw=1.0, label="Micro (Balancing Authorities)")
-    ax.plot(ts, df_ce2["apportioned_rto"], color=COLORS["accent_green"], lw=1.0, label="Meso-1 (RTO / ISO Regions)")
-    ax.plot(ts, df_ce2["apportioned_interconnection"], color=COLORS["accent_purple"], lw=1.0, label="Meso-2 (Interconnections)")
-    
-    ax.set_title("Causal Emergence 2.0: Multiscale Apportioned Causal Density across US Grid Hierarchy", fontweight="bold", loc="left")
-    ax.set_ylabel("Apportioned Density (nats/dim)")
-    ax.set_xlabel("Date (UTC 2021)")
-    ax.legend(loc="upper right", frameon=True, fontsize=7.0)
-    ax.grid(True)
-    
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    plt.savefig(output_path, dpi=300)
-    plt.close()
-    print(f"Generated {output_path}")
-
-
-def generate_figure_7_forecasting(output_path: str = "paper/figures/fig7_baseline_comparison.pdf"):
-    """Regenerate Figure 7 from out-of-sample forecast metrics."""
+def generate_figure_6_forecasting(output_path: str = "paper/figures/fig6_baseline_comparison.pdf"):
+    """Regenerate Figure 6 from out-of-sample forecast metrics."""
     apply_nature_style()
     with open("results/empirical/h4_forecast_results.json", "r") as f:
         h4 = json.load(f)
@@ -317,10 +297,10 @@ def main():
     generate_figure_3_grid()
     generate_figure_4_vre_response()
     generate_figure_5_uri()
-    generate_figure_6_ce2()
-    generate_figure_7_forecasting()
-    print("\nAll Figures 1 to 7 generated and saved to paper/figures/!")
+    generate_figure_6_forecasting()
+    print("\nAll Figures 1 to 6 generated and saved to paper/figures/!")
 
 
 if __name__ == "__main__":
     main()
+

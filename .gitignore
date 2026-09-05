@@ -38,15 +38,15 @@ ENV/
 .pytest_cache/
 
 # LaTeX intermediate files (keep .tex and .pdf)
-paper/*.aux
-paper/*.log
-paper/*.out
-paper/*.bbl
-paper/*.blg
-paper/*.toc
-paper/*.fls
-paper/*.fdb_latexmk
-paper/*.synctex.gz
+*.aux
+*.log
+*.out
+*.bbl
+*.blg
+*.toc
+*.fls
+*.fdb_latexmk
+*.synctex.gz
 
 # macOS system files
 .DS_Store

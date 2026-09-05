@@ -77,7 +77,9 @@ def verify_empirical_results() -> bool:
         ROOT_DIR / "results" / "empirical" / "h2_gamm_results.json",
         ROOT_DIR / "results" / "empirical" / "h3_event_study_results.json",
         ROOT_DIR / "results" / "empirical" / "h4_forecast_results.json",
-        ROOT_DIR / "results" / "empirical" / "ce2_apportioning_2021.parquet"
+        ROOT_DIR / "results" / "empirical" / "ercot_dce_2022h2_retrospective.parquet",
+        ROOT_DIR / "results" / "empirical" / "western_dce_2022h2_retrospective.parquet",
+        ROOT_DIR / "results" / "empirical" / "eastern_dce_2022h2_retrospective.parquet"
     ]
     all_present = True
     for ef in expected_files:
@@ -138,7 +140,11 @@ def compile_manuscript() -> bool:
 
     pdf_path = paper_dir / "main.pdf"
     if pdf_path.exists():
+        import shutil
+        sub_pdf = ROOT_DIR / "paper_dce_submitted.pdf"
+        shutil.copy2(pdf_path, sub_pdf)
         logger.info(f"Manuscript compiled successfully: {pdf_path} ({pdf_path.stat().st_size:,} bytes)")
+        logger.info(f"Copied submission PDF to {sub_pdf}")
         return True
     return False
 
