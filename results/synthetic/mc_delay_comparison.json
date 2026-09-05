@@ -1,0 +1,27 @@
+{
+  "dgp": "dgp_c_abrupt_emergence",
+  "n_steps": 300,
+  "transition_tau": 150,
+  "bandwidth": 20.0,
+  "results": {
+    "local_linear_gaussian": {
+      "chattering_variance": 7.140232684673391e-05,
+      "rmse": 0.205995622661894,
+      "mean": 0.21745469084080662,
+      "post_transition_q_accuracy": 0.9731543624161074
+    },
+    "dyn_nis": {
+      "chattering_variance": 0.0005205784713191353,
+      "rmse": 2.7145337522544604,
+      "mean": 2.763061833331782,
+      "post_transition_q_accuracy": 0.9865771812080537
+    },
+    "static_nis_windowed": {
+      "chattering_variance": 0.002602181007653151,
+      "rmse": 0.5390510071079087,
+      "mean": 0.615425047936214,
+      "post_transition_q_accuracy": 0.14093959731543623
+    }
+  },
+  "dyn_nis_vs_static_chattering_reduction_pct": 79.99453267132122
+}

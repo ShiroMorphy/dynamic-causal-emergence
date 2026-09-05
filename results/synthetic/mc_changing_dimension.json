@@ -1,0 +1,15 @@
+{
+  "dgp": "dgp_e",
+  "n_reps": 20,
+  "estimator": "linear_gaussian",
+  "bandwidth": 24.0,
+  "causal_only": false,
+  "threshold": 0.05,
+  "fpr": 0.0,
+  "mean_rmse": 0.5665016347883577,
+  "std_rmse": 0.03731325287871547,
+  "mean_bias": -0.4582637527688299,
+  "mean_dim_accuracy": 0.7489977728285078,
+  "mean_detection_delay": null,
+  "median_detection_delay": null
+}

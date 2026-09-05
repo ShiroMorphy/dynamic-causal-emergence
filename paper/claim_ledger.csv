@@ -1,0 +1,11 @@
+claim_id,claim_text,evidence_artifact,analysis_script,status
+C01,"DCE is calibrated under null nonstationarity (FPR <= alpha)",results/synthetic/mc_null_nonstationary.json,src/dce/experiments/run_synthetic_mc.py,verified
+C02,"Dyn-NIS+ improves tracking and detection delay over windowed baselines",results/synthetic/mc_delay_comparison.json,scripts/compare_estimators_dgp.py,verified
+
+C03,"Dynamic causal dimension q_t^* is accurately recovered with calibrated confidence sets",results/synthetic/mc_changing_dimension.json,src/dce/experiments/run_synthetic_mc.py,verified
+C04,"Linear-Gaussian analytical oracle matches numerical local estimator",results/synthetic/oracle_closed_form.json,tests/test_oracle_closed_form.py,verified
+
+C05,"Statistically significant DCE episodes occur in US power grid",results/empirical/h1_surrogate_results.json,src/dce/experiments/run_hypotheses_testing.py,verified
+C06,"VRE has a nonlinear association with DCE with verified threshold behavior",results/empirical/h2_gamm_results.json,src/dce/experiments/run_hypotheses_testing.py,verified
+C07,"Severe grid stress events exhibit significant dimensional collapse to rigid macro dynamics",results/empirical/h3_event_study_results.json,src/dce/experiments/run_hypotheses_testing.py,verified
+C08,"One-sided causal DCE evaluation indicates no unconditional linear forecast error reduction",results/empirical/h4_forecast_results.json,src/dce/experiments/run_hypotheses_testing.py,falsified_reported_null

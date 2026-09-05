@@ -1,0 +1,22 @@
+ba_code,ba_name,interconnection,rto_iso,region,timezone_offset_utc,status
+ERCO,Electric Reliability Council of Texas,ERCOT,ERCOT,Texas,-6,active
+CISO,California Independent System Operator,Western,CAISO,California,-8,active
+BPAT,Bonneville Power Administration,Western,WECC_Other,Northwest,-8,active
+PACW,PacifiCorp West,Western,WECC_Other,Northwest,-8,active
+PACE,PacifiCorp East,Western,WECC_Other,Rocky_Mountain,-7,active
+AZPS,Arizona Public Service Company,Western,WECC_Other,Southwest,-7,active
+NEVP,Nevada Power Company,Western,WECC_Other,Northwest,-8,active
+PSCO,Public Service Company of Colorado,Western,WECC_Other,Rocky_Mountain,-7,active
+BANC,Balancing Authority of Northern California,Western,WECC_Other,California,-8,active
+LDWP,Los Angeles Department of Water and Power,Western,WECC_Other,California,-8,active
+PJM,PJM Interconnection,Eastern,PJM,Mid-Atlantic,-5,active
+MISO,Midcontinent Independent System Operator,Eastern,MISO,Midwest,-6,active
+SWPP,Southwest Power Pool,Eastern,SPP,Central,-6,active
+NYIS,New York Independent System Operator,Eastern,NYISO,Northeast,-5,active
+ISNE,ISO New England,Eastern,ISONE,Northeast,-5,active
+SOCO,Southern Company Services,Eastern,SERC,Southeast,-6,active
+TVA,Tennessee Valley Authority,Eastern,SERC,Southeast,-6,active
+FPL,Florida Power & Light Company,Eastern,FRCC,Florida,-5,active
+DUK,Duke Energy Carolinas,Eastern,SERC,Southeast,-5,active
+CPLE,Duke Energy Progress East,Eastern,SERC,Southeast,-5,active
+SC,South Carolina Public Service Authority,Eastern,SERC,Southeast,-5,active

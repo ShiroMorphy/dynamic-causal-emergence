@@ -1,0 +1,27 @@
+cff-version: 1.2.0
+message: "If you use this software or methodology in academic work, please cite it as below."
+authors:
+  - family-names: "Mora-Rojas"
+    given-names: "Felipe"
+    affiliation: "Department of Physics and Complex Systems Research Group"
+title: "Dynamic Causal Emergence: Detecting Time-Varying Macroscopic Causality in Nonstationary Complex Systems"
+version: 1.0.0
+date-released: 2026-09-05
+url: "https://github.com/anonymous/dynamic-causal-emergence"
+license: "MIT"
+keywords:
+  - "causal emergence"
+  - "effective information"
+  - "nonstationary dynamics"
+  - "complex systems"
+  - "power grids"
+  - "EIA-930"
+  - "phase transitions"
+preferred-citation:
+  type: article
+  authors:
+    - family-names: "Mora-Rojas"
+      given-names: "Felipe"
+  title: "Dynamic Causal Emergence: Detecting Time-Varying Macroscopic Causality in Nonstationary Complex Systems: Evidence from Renewable-Dominated Continental Power Grids"
+  journal: "Preprint / Under Review"
+  year: 2026

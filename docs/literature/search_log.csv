@@ -1,0 +1,8 @@
+query,database,date,results_screened,relevant_found,reason_included_or_excluded
+"causal emergence" nonstationary,Google Scholar,2026-09-05,45,2,"Identified global/static assumptions in prior CE works; Liu 2024 exact linear theory included"
+"causal emergence" time varying,Google Scholar,2026-09-05,38,3,"Included 2025 sliding-window CE in sports dynamics; confirms need to differentiate DCE as dynamic estimator vs naive sliding window"
+"causal emergence" sliding window,Scopus,2026-09-05,24,2,"Windowed CE methods lack joint time-varying mechanism learning, temporal regularization, and causal scale uncertainty"
+"dynamic causal emergence",arXiv,2026-09-05,18,0,"No previous framework formally introducing time-indexed P_t, phi_t, and q_t^* joint estimation"
+"effective information" time varying,Crossref,2026-09-05,31,2,"Prior work computes discrete transfer entropy or sliding mutual info; interventional continuous EI in nonstationary settings remains open"
+"NIS+" nonstationary,Semantic Scholar,2026-09-05,15,1,"Yang et al. 2025 (NSR) assumes stationary transition mechanism; Dyn-NIS+ generalizes to time-localized transitions"
+"causal emergence" power grid,Web of Science,2026-09-05,29,1,"No prior work applying continuous interventional CE to U.S. bulk power grids; past studies use structural/spectral graphs only"

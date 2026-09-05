@@ -1,0 +1,15 @@
+{
+  "dgp": "dgp_c",
+  "n_reps": 5,
+  "estimator": "dyn_nis",
+  "bandwidth": 20.0,
+  "causal_only": false,
+  "threshold": 0.05,
+  "fpr": 1.0,
+  "mean_rmse": 3.832821862527426,
+  "std_rmse": 0.14076616728621072,
+  "mean_bias": 3.7708094266981105,
+  "mean_dim_accuracy": 0.20301507537688446,
+  "mean_detection_delay": -20.0,
+  "median_detection_delay": -20.0
+}

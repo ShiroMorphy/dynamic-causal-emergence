@@ -1,0 +1,5 @@
+event_id,event_name,event_type,start_timestamp_utc,end_timestamp_utc,primary_interconnection,primary_bas,source_report
+uri_2021,Winter Storm Uri,severe_winter_freeze,2021-02-12T00:00:00Z,2021-02-19T00:00:00Z,ERCOT,ERCO;SWPP;MISO,FERC-NERC Uri Inquiry (2021)
+ca_heat_2020,California Heatwave,extreme_heatwave,2020-08-14T00:00:00Z,2020-08-19T23:00:00Z,Western,CISO;BANC;LDWP,CAISO Root Cause Analysis (2021)
+elliott_2022,Winter Storm Elliott,severe_winter_freeze,2022-12-21T00:00:00Z,2022-12-26T23:00:00Z,Eastern,PJM;TVA;MISO;DUK,FERC-NERC Elliott Inquiry (2023)
+heat_2023,Texas Summer Heatwave,extreme_heatwave,2023-08-01T00:00:00Z,2023-08-15T23:00:00Z,ERCOT,ERCO,ERCOT Seasonal Assessment (2023)
