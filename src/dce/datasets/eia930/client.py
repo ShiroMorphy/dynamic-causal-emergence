@@ -49,8 +49,10 @@ BALANCING_AUTHORITIES = {
 ZENODO_EIA930_URLS = {
     "2021half1": "https://zenodo.org/api/records/22215263/files/eia930-2021half1.zip/content",
     "2021half2": "https://zenodo.org/api/records/22215263/files/eia930-2021half2.zip/content",
+    "2022half1": "https://zenodo.org/api/records/22215263/files/eia930-2022half1.zip/content",
     "2022half2": "https://zenodo.org/api/records/22215263/files/eia930-2022half2.zip/content",
 }
+
 
 
 def compute_file_sha256(filepath: str) -> str:
@@ -167,10 +169,12 @@ def load_real_eia930_archive(
     
     if period == "2021":
         zips = ["eia930-2021half1.zip", "eia930-2021half2.zip"]
+    elif period == "2022":
+        zips = ["eia930-2022half1.zip", "eia930-2022half2.zip"]
     elif period == "2022h2":
         zips = ["eia930-2022half2.zip"]
     else:
-        raise ValueError(f"Unsupported period: {period}. Use '2021' or '2022h2'.")
+        raise ValueError(f"Unsupported period: {period}. Use '2021', '2022', or '2022h2'.")
         
     ba_reg = load_ba_registry()
     dfs = []

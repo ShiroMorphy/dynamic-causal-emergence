@@ -25,7 +25,7 @@ from dce.stats.hypothesis import (
 )
 
 
-def execute_h1_test(output_dir: str = "results/empirical", n_surrogates: int = 50) -> dict:
+def execute_h1_test(output_dir: str = "results/empirical", n_surrogates: int = 1000) -> dict:
     """Execute H1 surrogate test on ERCOT with model refitting on every surrogate."""
     print("\n=======================================================")
     print(f"Executing H1: Surrogate Testing (n={n_surrogates} IAAFT refits)")

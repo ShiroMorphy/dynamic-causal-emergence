@@ -1,7 +1,7 @@
 {
   "source": "Zenodo PUDL Raw EIA Form 930 Archive (Record 22215263)",
   "license": "Creative Commons Attribution 4.0 International (CC-BY-4.0)",
-  "download_date_utc": "2026-09-05T16:04:22Z",
+  "download_date_utc": "2026-09-05T16:35:10Z",
   "files": {
     "eia930-2021half1.zip": {
       "sha256": "9ca67bd2e07d1a848a6e3cf42ddf4c8abbb706c90e63827f22f283387c1ef42a",
@@ -10,6 +10,10 @@
     "eia930-2021half2.zip": {
       "sha256": "83e0ad541664a959eba479319c36e15ff06387bde50fb2c969876671f8b16cba",
       "bytes": 20134306
+    },
+    "eia930-2022half1.zip": {
+      "sha256": "963b817bbb376e6d9ecf7db35b754b307c72e2fa0e38e750c0c11e23aefb0804",
+      "bytes": 19719191
     },
     "eia930-2022half2.zip": {
       "sha256": "531fb1bfb394bed80e0325153d15f950585b9ff3338f43ab7333055c05b35e35",

@@ -7,5 +7,5 @@ C04,"Linear-Gaussian analytical oracle matches numerical local estimator",result
 
 C05,"Statistically significant DCE episodes occur in US power grid",results/empirical/h1_surrogate_results.json,src/dce/experiments/run_hypotheses_testing.py,verified
 C06,"VRE has a nonlinear association with DCE with verified threshold behavior",results/empirical/h2_gamm_results.json,src/dce/experiments/run_hypotheses_testing.py,verified
-C07,"Severe grid stress events exhibit significant dimensional collapse to rigid macro dynamics",results/empirical/h3_event_study_results.json,src/dce/experiments/run_hypotheses_testing.py,verified
+C07,"Severe grid stress events exhibit significant dimensional collapse consistent with acute contraction in effective degrees of freedom",results/empirical/h3_event_study_results.json,src/dce/experiments/run_hypotheses_testing.py,verified
 C08,"One-sided causal DCE evaluation indicates no unconditional linear forecast error reduction",results/empirical/h4_forecast_results.json,src/dce/experiments/run_hypotheses_testing.py,falsified_reported_null

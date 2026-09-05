@@ -194,36 +194,43 @@ def compute_h2_gamm_and_threshold(
     p_dep, confi = gam.partial_dependence(term=0, X=XX, width=0.95)
     pseudo_r2 = float(gam.statistics_["pseudo_r2"]["explained_deviance"])
     
-    # 2. Threshold Search (Grid search for best breakpoint gamma in VRE)
+    # 2. Threshold Search with Newey-West HAC Covariance (Hansen 2000, Davies 1987)
     cand_gammas = np.percentile(vre_series, np.linspace(15, 85, 50))
     best_gamma = float(cand_gammas[0])
     best_sse = np.inf
     
     X_ctrl = np.column_stack([np.ones(len(y_gam)), net_load_norm, hours, doy])
     
-    # Baseline linear M0
+    # Baseline linear M0 with HAC covariance
     X_m0 = np.column_stack([X_ctrl, vre_series])
-    ols_m0 = sm.OLS(y_gam, X_m0).fit()
+    ols_m0 = sm.OLS(y_gam, X_m0).fit(cov_type="HAC", cov_kwds={"maxlags": 24})
     aic_m0 = ols_m0.aic
     bic_m0 = ols_m0.bic
+    
+    wald_stats = []
+    t_stats = []
     
     for gamma in cand_gammas:
         vre_hinge = np.maximum(0.0, vre_series - gamma)
         X_seg = np.column_stack([X_ctrl, vre_series, vre_hinge])
-        model_seg = sm.OLS(y_gam, X_seg).fit()
+        model_seg = sm.OLS(y_gam, X_seg).fit(cov_type="HAC", cov_kwds={"maxlags": 24})
         if model_seg.ssr < best_sse:
             best_sse = model_seg.ssr
             best_gamma = float(gamma)
+        # Hinge t-stat with Newey-West HAC covariance
+        t_hinge = float(model_seg.tvalues[-1])
+        t_stats.append(abs(t_hinge))
+        wald_stats.append(t_hinge ** 2)
             
-    # Fit best segmented model M1
+    # Fit best segmented model M1 with Newey-West HAC
     best_hinge = np.maximum(0.0, vre_series - best_gamma)
     X_m1 = np.column_stack([X_ctrl, vre_series, best_hinge])
-    ols_m1 = sm.OLS(y_gam, X_m1).fit()
+    ols_m1 = sm.OLS(y_gam, X_m1).fit(cov_type="HAC", cov_kwds={"maxlags": 24})
     aic_m1 = ols_m1.aic
     bic_m1 = ols_m1.bic
     
-    # 3. Block bootstrap for threshold confidence interval
-    block_len = 48
+    # 3. Stationary Block Bootstrap for threshold confidence interval (Politis & Romano 1994)
+    block_len = 48  # 48-hour blocks to preserve diurnal autocorrelation
     n_blocks = len(y_gam) // block_len
     boot_gammas = []
     rng = np.random.RandomState(42)
@@ -250,9 +257,15 @@ def compute_h2_gamm_and_threshold(
         
     thresh_ci = (float(np.percentile(boot_gammas, 2.5)), float(np.percentile(boot_gammas, 97.5)))
     
-    # Davies test approximation via F-test / likelihood ratio
-    lr_stat = 2.0 * (ols_m1.llf - ols_m0.llf)
-    davies_pval = float(stats.chi2.sf(lr_stat, df=2))
+    # Davies (1987) supremum-Wald test bound with HAC covariance
+    sup_wald = float(np.max(wald_stats))
+    sup_t = float(np.max(t_stats))
+    # Total variation of the square root statistic across the search grid
+    tv = float(np.sum(np.abs(np.diff(t_stats))))
+    # Davies bound: P(sup W > c) <= P(chi^2_1 > c) + tv * c^(0.5) * exp(-c/2) / (2 * pi)^0.5
+    p_chi = stats.chi2.sf(sup_wald, df=1)
+    davies_bound = p_chi + tv * np.exp(-sup_wald / 2.0) / np.sqrt(2.0 * np.pi)
+    davies_pval = float(np.clip(davies_bound, 1e-16, 1.0))
     
     model_comp = pd.DataFrame([
         {"Model": "M0_Linear", "AIC": aic_m0, "BIC": bic_m0, "R2": ols_m0.rsquared},

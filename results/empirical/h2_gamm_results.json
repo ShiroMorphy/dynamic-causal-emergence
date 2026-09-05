@@ -6,7 +6,7 @@
       0.1578344370846034,
       0.43261516943219186
     ],
-    "davies_pvalue": 5.941121071251409e-50,
+    "davies_pvalue": 7.536721799142961e-05,
     "model_comparison": [
       {
         "Model": "M0_Linear",
@@ -641,7 +641,7 @@
       0.10744085351181966,
       0.36230170156311675
     ],
-    "davies_pvalue": 1.7744868805988059e-06,
+    "davies_pvalue": 0.002248729062639099,
     "model_comparison": [
       {
         "Model": "M0_Linear",
