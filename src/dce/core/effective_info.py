@@ -207,13 +207,11 @@ def compute_causal_spectrum(
     # Cholesky factorization of Sigma
     try:
         L = np.linalg.cholesky(Sigma_sym)
+        M = scipy.linalg.solve_triangular(L, A_arr, lower=True, check_finite=False)
     except np.linalg.LinAlgError:
         w_eigs, v_eigs = np.linalg.eigh(Sigma_sym)
         w_clipped = np.maximum(w_eigs, max(regularization, 1e-12))
-        L = v_eigs @ np.diag(np.sqrt(w_clipped))
-        
-    # M = L^{-1} A
-    M = scipy.linalg.solve_triangular(L, A_arr, lower=True)
+        M = (v_eigs.T @ A_arr) / np.sqrt(w_clipped)[:, np.newaxis]
     
     # Singular values s_i of M: s_i >= 0 sorted descending
     # lambda_i of Sigma^{-1} A A^T are s_i^2

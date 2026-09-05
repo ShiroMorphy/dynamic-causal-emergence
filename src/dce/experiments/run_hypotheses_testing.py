@@ -18,12 +18,28 @@ from scipy import stats
 from dce.datasets.eia930.client import load_real_eia930_archive
 from dce.datasets.eia930.microstate import build_power_grid_microstate
 from dce.estimators.linear_gaussian import LocalLinearGaussianDCE
+from typing import Tuple
+from dce.stats.surrogates import generate_multivariate_surrogates
 from dce.stats.hypothesis import (
     run_h1_surrogate_test,
+    compute_surrogate_significance_from_ensemble,
     compute_h2_gamm_and_threshold,
     compute_h3_matched_event_study,
     compute_h4_walk_forward_forecasting,
 )
+
+
+def _fit_single_surrogate(X_in: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    """Top-level picklable surrogate model fitting routine returning (dcd_pr, ccg)."""
+    m = LocalLinearGaussianDCE(
+        macro_dims=[2],
+        bandwidth=48.0,
+        causal_only=False,
+        ridge_alpha=1e-4,
+        selection_criterion="density"
+    )
+    m.fit(X_in)
+    return m.dcd_pr_, m.optimal_dce_density_
 
 
 def execute_h1_test(output_dir: str = "results/empirical", n_surrogates: int = 1000) -> dict:
@@ -41,28 +57,6 @@ def execute_h1_test(output_dir: str = "results/empirical", n_surrogates: int = 1
     T_slice = 2000
     X_slice = X[:T_slice]
     
-    def fit_model_dcd(X_in):
-        m = LocalLinearGaussianDCE(
-            macro_dims=[2],
-            bandwidth=48.0,
-            causal_only=False,
-            ridge_alpha=1e-4,
-            selection_criterion="density"
-        )
-        m.fit(X_in)
-        return m.dcd_pr_
-        
-    def fit_model_ccg(X_in):
-        m = LocalLinearGaussianDCE(
-            macro_dims=[2],
-            bandwidth=48.0,
-            causal_only=False,
-            ridge_alpha=1e-4,
-            selection_criterion="density"
-        )
-        m.fit(X_in)
-        return m.optimal_dce_density_
-        
     t0 = time.time()
     m_emp = LocalLinearGaussianDCE(
         macro_dims=[2],
@@ -76,25 +70,41 @@ def execute_h1_test(output_dir: str = "results/empirical", n_surrogates: int = 1
     empirical_ccg = m_emp.optimal_dce_density_
     print(f"Empirical fit completed in {time.time() - t0:.2f}s: Mean DCD_PR = {np.mean(empirical_dcd):.4f}, Mean CCG = {np.mean(empirical_ccg):.4f}")
     
+    print(f"Generating {n_surrogates} strictly accepted multivariate IAAFT surrogates (T={X_slice.shape[0]}, p={X_slice.shape[1]})...")
+    t_gen = time.time()
+    surrogates = generate_multivariate_surrogates(X_slice, n_surrogates=n_surrogates, seed=42, strictly_accepted=True)
+    print(f"Surrogate generation completed in {time.time() - t_gen:.2f}s")
+    
+    print(f"Refitting DCE model on {n_surrogates} surrogates in parallel across worker processes...")
+    from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+    workers = min(n_surrogates, max(1, (os.cpu_count() or 4) - 1))
+    t_refit = time.time()
+    try:
+        with ProcessPoolExecutor(max_workers=workers) as executor:
+            surr_results = list(executor.map(_fit_single_surrogate, surrogates))
+    except Exception as e:
+        print(f"ProcessPoolExecutor fallback ({e}), using ThreadPoolExecutor...")
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            surr_results = list(executor.map(_fit_single_surrogate, surrogates))
+            
+    surr_dcd_ensemble = np.array([r[0] for r in surr_results], dtype=np.float64)
+    surr_ccg_ensemble = np.array([r[1] for r in surr_results], dtype=np.float64)
+    dt_total = time.time() - t_refit
+    print(f"All {n_surrogates} surrogate model refits completed in {dt_total:.2f}s ({n_surrogates / max(dt_total, 0.001):.2f} fits/sec)")
+    
     # Run H1 on DCD_PR (Primary Dimensionality Metric - Contraction)
-    print(f"\n--- Testing Primary Metric: DCD_PR (Dynamic Causal Dimensionality) ---")
-    h1_res_dcd = run_h1_surrogate_test(
+    print(f"\n--- Evaluating Primary Metric: DCD_PR (Dynamic Causal Dimensionality) ---")
+    h1_res_dcd = compute_surrogate_significance_from_ensemble(
         empirical_dce=empirical_dcd,
-        X_micro=X_slice,
-        fit_model_fn=fit_model_dcd,
-        n_surrogates=n_surrogates,
-        seed=42,
+        surr_dce_ensemble=surr_dcd_ensemble,
         test_direction="less"
     )
     
     # Run H1 on CCG (Secondary Concentration Metric - Emergence)
-    print(f"\n--- Testing Secondary Metric: CCG (Causal Concentration Gain) ---")
-    h1_res_ccg = run_h1_surrogate_test(
+    print(f"\n--- Evaluating Secondary Metric: CCG (Causal Concentration Gain) ---")
+    h1_res_ccg = compute_surrogate_significance_from_ensemble(
         empirical_dce=empirical_ccg,
-        X_micro=X_slice,
-        fit_model_fn=fit_model_ccg,
-        n_surrogates=n_surrogates,
-        seed=42,
+        surr_dce_ensemble=surr_ccg_ensemble,
         test_direction="greater"
     )
     

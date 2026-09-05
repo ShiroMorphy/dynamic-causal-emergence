@@ -102,39 +102,14 @@ def fdr_bh(p_vals: np.ndarray) -> np.ndarray:
     return np.clip(q, 0.0, 1.0)
 
 
-def run_h1_surrogate_test(
+def compute_surrogate_significance_from_ensemble(
     empirical_dce: np.ndarray,
-    X_micro: np.ndarray,
-    fit_model_fn: Callable[[np.ndarray], np.ndarray],
-    n_surrogates: int = 50,
+    surr_dce_ensemble: np.ndarray,
     alpha: float = 0.05,
-    seed: int = 42,
     test_direction: str = "greater"
 ) -> Hypothesis1Result:
-    """
-    Test H1: Surrogate testing with full model refitting on each surrogate (CRITICAL-02).
-    
-    Args:
-        empirical_dce: (T,) estimated DCE/DCD from real microstate data.
-        X_micro: (T, p) real microstate matrix.
-        fit_model_fn: Callable that accepts X_surr and returns emergence array (T,).
-        n_surrogates: Number of surrogate realizations (B >= 50).
-        alpha: Significance level.
-        seed: Random seed.
-        test_direction: "greater" (emergence/concentration), "less" (dimensional contraction), or "two-sided".
-    """
-    T = len(empirical_dce)
-    print(f"Generating {n_surrogates} strictly accepted multivariate IAAFT surrogates (T={X_micro.shape[0]}, p={X_micro.shape[1]})...")
-    surrogates = generate_multivariate_surrogates(X_micro, n_surrogates=n_surrogates, seed=seed, strictly_accepted=True)
-    
-    print(f"Refitting DCE model on {n_surrogates} surrogates to construct exact null distribution...")
-    from concurrent.futures import ThreadPoolExecutor
-    workers = min(n_surrogates, max(1, (os.cpu_count() or 4) - 1))
-    with ThreadPoolExecutor(max_workers=workers) as executor:
-        surr_results = list(executor.map(fit_model_fn, surrogates))
-    surr_dce_ensemble = np.array(surr_results, dtype=np.float64)
-        
-    # 1. Pointwise exceedance p-values
+    """Compute pointwise and global significance metrics from pre-evaluated surrogate ensemble."""
+    n_surrogates = len(surr_dce_ensemble)
     if test_direction == "less":
         exceedances = np.sum(surr_dce_ensemble <= empirical_dce[np.newaxis, :], axis=0)
     elif test_direction == "two-sided":
@@ -183,6 +158,54 @@ def run_h1_surrogate_test(
         mean_stat_pvalue=p_mean,
         surrogate_dce_ensemble=surr_dce_ensemble,
         surrogate_dce_95th=surr_95th
+    )
+
+
+def run_h1_surrogate_test(
+    empirical_dce: np.ndarray,
+    X_micro: np.ndarray,
+    fit_model_fn: Callable[[np.ndarray], np.ndarray],
+    n_surrogates: int = 50,
+    alpha: float = 0.05,
+    seed: int = 42,
+    test_direction: str = "greater",
+    surrogate_ensemble: Optional[np.ndarray] = None
+) -> Hypothesis1Result:
+    """
+    Test H1: Surrogate testing with full model refitting on each surrogate (CRITICAL-02).
+    
+    Args:
+        empirical_dce: (T,) estimated DCE/DCD from real microstate data.
+        X_micro: (T, p) real microstate matrix.
+        fit_model_fn: Callable that accepts X_surr and returns emergence array (T,).
+        n_surrogates: Number of surrogate realizations (B >= 50).
+        alpha: Significance level.
+        seed: Random seed.
+        test_direction: "greater" (emergence/concentration), "less" (dimensional contraction), or "two-sided".
+        surrogate_ensemble: Optional pre-evaluated surrogate array of shape (B, T).
+    """
+    if surrogate_ensemble is not None:
+        surr_dce_ensemble = np.asarray(surrogate_ensemble, dtype=np.float64)
+    else:
+        print(f"Generating {n_surrogates} strictly accepted multivariate IAAFT surrogates (T={X_micro.shape[0]}, p={X_micro.shape[1]})...")
+        surrogates = generate_multivariate_surrogates(X_micro, n_surrogates=n_surrogates, seed=seed, strictly_accepted=True)
+        
+        print(f"Refitting DCE model on {n_surrogates} surrogates to construct exact null distribution...")
+        from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+        workers = min(n_surrogates, max(1, (os.cpu_count() or 4) - 1))
+        try:
+            with ProcessPoolExecutor(max_workers=workers) as executor:
+                surr_results = list(executor.map(fit_model_fn, surrogates))
+        except Exception:
+            with ThreadPoolExecutor(max_workers=workers) as executor:
+                surr_results = list(executor.map(fit_model_fn, surrogates))
+        surr_dce_ensemble = np.array(surr_results, dtype=np.float64)
+        
+    return compute_surrogate_significance_from_ensemble(
+        empirical_dce=empirical_dce,
+        surr_dce_ensemble=surr_dce_ensemble,
+        alpha=alpha,
+        test_direction=test_direction
     )
 
 
