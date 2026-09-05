@@ -12406,7 +12406,7 @@
   "fisher_panel": {
     "t_statistic": 16.280223171521932,
     "degrees_of_freedom": 10,
-    "p_value": 0.0918867698007316,
+    "p_value": 0.09188676980073157,
     "n_events": 5,
     "event_ids": [
       "uri_2021",

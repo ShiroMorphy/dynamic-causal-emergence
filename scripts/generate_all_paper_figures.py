@@ -123,21 +123,20 @@ def generate_figure_3_grid(output_path: str = "paper/figures/fig3_power_grid_tra
     fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(7.2, 5.6), sharex=True, gridspec_kw={"height_ratios": [1.2, 0.9, 0.9], "hspace": 0.18})
     ts = pd.to_datetime(df_ercot["timestamp"])
     
-    # Panel A: DCE Retrospective vs Causal
-    ax1.plot(ts, df_ercot["dce_density"], color=COLORS["primary_blue"], lw=1.1, label=r"Retrospective $DCE_t^{\text{density}}$")
-    ax1.plot(ts, df_causal["dce_density"], color=COLORS["accent_yellow"], lw=0.9, alpha=0.85, label=r"Causal Online $DCE_t^{\text{density}}$")
+    # Panel A: CCG Retrospective vs Causal
+    ax1.plot(ts, df_ercot["ccg_optimal"], color=COLORS["primary_blue"], lw=1.1, label=r"Retrospective $CCG_t$")
+    ax1.plot(ts, df_causal["ccg_optimal"], color=COLORS["accent_yellow"], lw=0.9, alpha=0.85, label=r"Causal Online $CCG_t$")
     ax1.axhline(0.0, color="grey", ls="--", lw=0.8)
-    ax1.set_title("a | Dynamic Causal Emergence in ERCOT Interconnection (2021)", fontweight="bold", loc="left")
-    ax1.set_ylabel(r"$DCE_t^{\text{density}}$ (nats/dim)")
+    ax1.set_title("a | Dynamic Causal Concentration in ERCOT Interconnection (2021)", fontweight="bold", loc="left")
+    ax1.set_ylabel(r"$CCG_t$ (nats)")
     ax1.legend(loc="upper right", frameon=True, fontsize=6.8)
     ax1.grid(True)
     
-    # Panel B: Causal Dimension q_t^*
-    ax2.step(ts, df_ercot["q_star"], color=COLORS["accent_purple"], where="mid", lw=1.2, label=r"Optimal Dimension $q_t^*$")
-    ax2.step(ts, df_causal["q_star"], color=COLORS["accent_orange"], where="mid", lw=0.9, alpha=0.7, label=r"Causal Online $q_t^*$")
-    ax2.set_title(r"b | Dynamic Optimal Macroscopic Dimension $q_t^*$", fontweight="bold", loc="left")
-    ax2.set_ylabel(r"Optimal $q^*$")
-    ax2.set_yticks([1, 2, 3, 4, 6])
+    # Panel B: Dynamic Causal Participation Ratio DCD_PR
+    ax2.plot(ts, df_ercot["dcd_pr"], color=COLORS["accent_purple"], lw=1.2, label=r"Retrospective $DCD_t^{\text{PR}}$")
+    ax2.plot(ts, df_causal["dcd_pr"], color=COLORS["accent_orange"], lw=0.9, alpha=0.7, label=r"Causal Online $DCD_t^{\text{PR}}$")
+    ax2.set_title(r"b | Dynamic Causal Participation Ratio $DCD_t^{\text{PR}}$", fontweight="bold", loc="left")
+    ax2.set_ylabel(r"Degrees of Freedom ($DCD^{\text{PR}}$)")
     ax2.legend(loc="upper right", frameon=True, fontsize=6.8)
     ax2.grid(True)
     
@@ -173,20 +172,20 @@ def generate_figure_4_vre_response(output_path: str = "paper/figures/fig4_vre_no
     # Panel A: GAM partial dependence
     df_ercot = pd.read_parquet("results/empirical/ercot_dce_2021_retrospective.parquet")
     sub_idx = np.linspace(0, len(df_ercot) - 1, 600, dtype=int)
-    ax1.scatter(df_ercot["vre_penetration"].values[sub_idx] * 100, df_ercot["dce_density"].values[sub_idx],
+    ax1.scatter(df_ercot["vre_penetration"].values[sub_idx] * 100, df_ercot["dcd_pr"].values[sub_idx],
                 color=COLORS["primary_blue"], alpha=0.15, s=6, label="Hourly Obs")
     ax1.plot(vre_grid, p_dep, color=COLORS["accent_orange"], lw=2.0, label=r"GAM Spline $s(\text{VRE})$")
     ax1.fill_between(vre_grid, confi[:, 0], confi[:, 1], color=COLORS["accent_orange"], alpha=0.25, label="95% CI")
     ax1.axvline(gamma, color="firebrick", ls="--", lw=1.4, label=f"Threshold $\hat{{\gamma}}={gamma:.1f}\\%$")
     ax1.set_title("a | Nonlinear Causal Response to VRE (ERCOT)", fontweight="bold", loc="left")
     ax1.set_xlabel("Renewable Penetration VRE (%)")
-    ax1.set_ylabel(r"Partial Effect on $DCE_t^{\text{density}}$")
+    ax1.set_ylabel(r"Partial Effect on $DCD_t^{\text{PR}}$")
     ax1.legend(loc="upper left", frameon=True, fontsize=6.5)
     ax1.grid(True)
     
     # Panel B: Marginal derivative and threshold stability
     grad = np.gradient(p_dep, vre_grid)
-    ax2.plot(vre_grid, grad, color=COLORS["primary_dark"], lw=1.6, label=r"$d(DCE)/d(\text{VRE})$")
+    ax2.plot(vre_grid, grad, color=COLORS["primary_dark"], lw=1.6, label=r"$d(DCD^{\text{PR}})/d(\text{VRE})$")
     ax2.axhline(0, color="grey", ls=":", lw=1.0)
     ax2.axvspan(ci_gamma[0], ci_gamma[1], color="firebrick", alpha=0.15, label=f"95% CI [{ci_gamma[0]:.1f}%, {ci_gamma[1]:.1f}%]")
     ax2.axvline(gamma, color="firebrick", ls="--", lw=1.4)
@@ -218,12 +217,12 @@ def generate_figure_5_uri(output_path: str = "paper/figures/fig5_extreme_events_
     
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(7.2, 4.2), sharex=True, gridspec_kw={"hspace": 0.20})
     
-    # Panel A: Net Load vs DCE
+    # Panel A: Net Load vs CCG
     net_load_gw = uri_slice["net_load_mw"].values / 1000.0
-    ax1.plot(ts, event_dce, color=COLORS["primary_blue"], lw=1.5, label="Event DCE (Uri)")
+    ax1.plot(ts, event_dce, color=COLORS["primary_blue"], lw=1.5, label="Event CCG (Uri)")
     ax1.plot(ts, matched_dce, color=COLORS["neutral_grey"], ls="--", lw=1.2, label="Matched Baseline Non-Event")
     ax1.set_title("a | Winter Storm Uri (Feb 12–19, 2021): Causal Dynamics", fontweight="bold", loc="left")
-    ax1.set_ylabel(r"$DCE_t^{\text{density}}$ (nats/dim)", color=COLORS["primary_blue"])
+    ax1.set_ylabel(r"$CCG_t$ (nats)", color=COLORS["primary_blue"])
     ax1.legend(loc="upper left", frameon=True, fontsize=6.5)
     ax1.grid(True)
     
@@ -231,11 +230,12 @@ def generate_figure_5_uri(output_path: str = "paper/figures/fig5_extreme_events_
     ax1_twin.plot(ts, net_load_gw, color=COLORS["accent_orange"], ls=":", lw=1.2, label="Net Load (GW)")
     ax1_twin.set_ylabel("Net Load (GW)", color=COLORS["accent_orange"])
     
-    # Panel B: Dimensional Shift Delta q*
-    ax2.step(ts, uri_slice["q_star"].values, color=COLORS["accent_purple"], where="mid", lw=1.4, label="Event Dimension $q^*$")
-    ax2.axhline(np.percentile(df_ercot["q_star"], 10.0), color="firebrick", ls="--", lw=1.0, label="10th Percentile Normal Threshold")
-    ax2.set_title(r"b | Dimensional Collapse ($\Delta q^*$) to Rigid Macro Regime", fontweight="bold", loc="left")
-    ax2.set_ylabel("Causal Dimension $q^*$")
+    # Panel B: Dynamic Causal Participation Ratio DCD_PR
+    dcd_event = uri_slice["dcd_pr"].values
+    ax2.plot(ts, dcd_event, color=COLORS["accent_purple"], lw=1.4, label=r"Event Participation Ratio $DCD_t^{\text{PR}}$")
+    ax2.axhline(np.percentile(df_ercot["dcd_pr"], 10.0), color="firebrick", ls="--", lw=1.0, label="10th Percentile Baseline Normal")
+    ax2.set_title(r"b | Causal Degrees of Freedom ($DCD_t^{\text{PR}}$) Dynamics", fontweight="bold", loc="left")
+    ax2.set_ylabel(r"Participation Ratio $DCD_t^{\text{PR}}$")
     ax2.set_xlabel("UTC Date (Feb 2021)")
     ax2.legend(loc="upper right", frameon=True, fontsize=6.5)
     ax2.grid(True)
@@ -263,7 +263,7 @@ def generate_figure_6_forecasting(output_path: str = "paper/figures/fig6_baselin
     x = np.arange(len(horizons))
     w = 0.35
     ax1.bar(x - w/2, rmse_base, width=w, color=COLORS["neutral_grey"], label="Baseline AR(2)")
-    ax1.bar(x + w/2, rmse_aug, width=w, color=COLORS["primary_blue"], label=r"Augmented (+ Causal $DCE_t$)")
+    ax1.bar(x + w/2, rmse_aug, width=w, color=COLORS["primary_blue"], label=r"Augmented (+ Causal $DCD_t$)")
     ax1.set_title("a | Walk-Forward Forecast Error RMSE", fontweight="bold", loc="left")
     ax1.set_xticks(x)
     ax1.set_xticklabels([f"h={h}h" for h in horizons])
