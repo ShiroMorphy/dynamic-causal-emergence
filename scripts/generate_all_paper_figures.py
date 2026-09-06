@@ -294,7 +294,7 @@ def generate_figure_6_forecasting(output_path: str = "paper/figures/fig6_baselin
     ax2.set_xticks(x)
     ax2.set_xticklabels([f"h={h}h" for h in horizons])
     ax2.set_ylabel("DM Statistic")
-    ax2.set_ylim(-2.8, 2.2)
+    ax2.set_ylim(-3.5, 2.2)
     ax2.legend(loc="lower right", frameon=True, fontsize=6.8)
     ax2.grid(axis="y")
     
