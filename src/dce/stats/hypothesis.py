@@ -30,6 +30,10 @@ class Hypothesis1Result(NamedTuple):
     mean_stat_pvalue: float
     surrogate_dce_ensemble: np.ndarray
     surrogate_dce_95th: np.ndarray
+    extreme_stat_empirical: float = 0.0
+    extreme_stat_pvalue: float = 0.0
+    critical_envelope: Optional[np.ndarray] = None
+    test_direction: str = "greater"
 
     @property
     def significant_ratio(self) -> float:
@@ -47,6 +51,8 @@ class Hypothesis2Result(NamedTuple):
     threshold_ci: Tuple[float, float]
     davies_pvalue: float
     model_comparison: pd.DataFrame
+    sup_wald_stat: float = 0.0
+    sup_wald_pvalue: float = 0.0
 
 
 class Hypothesis3Result(NamedTuple):
@@ -78,6 +84,7 @@ class Hypothesis4Result(NamedTuple):
     diebold_mariano_pvalue: Dict[int, float]
     stress_tail_rmse_baseline: Dict[int, float]
     stress_tail_rmse_augmented: Dict[int, float]
+    diebold_mariano_qvalue: Dict[int, float] = {}
 
     @property
     def rmse_augmented_dce(self) -> float:
@@ -124,15 +131,24 @@ def compute_surrogate_significance_from_ensemble(
     sig_raw = float(np.mean(p_values_pointwise < alpha))
     sig_fdr = float(np.mean(q_values_fdr < alpha))
     
-    # 2. Global Max / Extreme Test Statistic
+    # 2. Global Direction-Aware Extreme Test Statistic & Critical Envelope
     if test_direction == "less":
-        t_max_emp = float(np.min(empirical_dce))
-        t_max_surr = np.min(surr_dce_ensemble, axis=1)
-        p_max = float((np.sum(t_max_surr <= t_max_emp) + 1.0) / (n_surrogates + 1.0))
-    else:
-        t_max_emp = float(np.max(empirical_dce))
-        t_max_surr = np.max(surr_dce_ensemble, axis=1)
-        p_max = float((np.sum(t_max_surr >= t_max_emp) + 1.0) / (n_surrogates + 1.0))
+        t_ext_emp = float(np.min(empirical_dce))
+        t_ext_surr = np.min(surr_dce_ensemble, axis=1)
+        p_ext = float((np.sum(t_ext_surr <= t_ext_emp) + 1.0) / (n_surrogates + 1.0))
+        critical_env = np.percentile(surr_dce_ensemble, 5.0, axis=0)
+    elif test_direction == "two-sided":
+        grand_surr_pt = np.mean(surr_dce_ensemble, axis=0)
+        emp_dev = np.max(np.abs(empirical_dce - grand_surr_pt))
+        surr_dev = np.max(np.abs(surr_dce_ensemble - grand_surr_pt[np.newaxis, :]), axis=1)
+        t_ext_emp = float(emp_dev)
+        p_ext = float((np.sum(surr_dev >= emp_dev) + 1.0) / (n_surrogates + 1.0))
+        critical_env = np.percentile(surr_dce_ensemble, 95.0, axis=0)
+    else:  # "greater"
+        t_ext_emp = float(np.max(empirical_dce))
+        t_ext_surr = np.max(surr_dce_ensemble, axis=1)
+        p_ext = float((np.sum(t_ext_surr >= t_ext_emp) + 1.0) / (n_surrogates + 1.0))
+        critical_env = np.percentile(surr_dce_ensemble, 95.0, axis=0)
     
     # 3. Global Mean Test Statistic: T_mean = mean_t DCE_t
     t_mean_emp = float(np.mean(empirical_dce))
@@ -145,19 +161,23 @@ def compute_surrogate_significance_from_ensemble(
     else:
         p_mean = float((np.sum(t_mean_surr >= t_mean_emp) + 1.0) / (n_surrogates + 1.0))
     
-    surr_95th = np.percentile(surr_dce_ensemble, 95.0, axis=0)
+    surr_95th = critical_env  # for backward compatibility
     
     return Hypothesis1Result(
         p_values_pointwise=p_values_pointwise,
         q_values_fdr=q_values_fdr,
         significant_ratio_raw=sig_raw,
         significant_ratio_fdr=sig_fdr,
-        max_stat_empirical=t_max_emp,
-        max_stat_pvalue=p_max,
+        max_stat_empirical=t_ext_emp,
+        max_stat_pvalue=p_ext,
         mean_stat_empirical=t_mean_emp,
         mean_stat_pvalue=p_mean,
         surrogate_dce_ensemble=surr_dce_ensemble,
-        surrogate_dce_95th=surr_95th
+        surrogate_dce_95th=surr_95th,
+        extreme_stat_empirical=t_ext_emp,
+        extreme_stat_pvalue=p_ext,
+        critical_envelope=critical_env,
+        test_direction=test_direction
     )
 
 
@@ -214,12 +234,13 @@ def compute_h2_gamm_and_threshold(
     vre_series: np.ndarray,
     timestamps: pd.DatetimeIndex,
     net_load_series: Optional[np.ndarray] = None,
-    n_bootstrap: int = 100
+    n_bootstrap: int = 2000
 ) -> Hypothesis2Result:
     """
     Test H2: Generalized Additive Model and Threshold/Segmented Regression (Section 18).
     
-    Compares Linear (M0), Segmented (M1), and GAM Spline (M2) with bootstrap stability.
+    Fits LinearGAM with cyclic P-splines for diurnal and annual cycles.
+    Evaluates threshold existence via Hansen (1996) supremum-Wald test with moving-block bootstrap (B=2000).
     """
     hours = timestamps.hour.values if hasattr(timestamps, "hour") else np.zeros(len(dce_series))
     doy = timestamps.dayofyear.values if hasattr(timestamps, "dayofyear") else np.zeros(len(dce_series))
@@ -232,7 +253,13 @@ def compute_h2_gamm_and_threshold(
     X_gam = np.column_stack([vre_series, net_load_norm, hours, doy])
     y_gam = dce_series
     
-    gam = LinearGAM(s(0, n_splines=15) + s(1, n_splines=10) + s(2, n_splines=8) + s(3, n_splines=10))
+    # 1. Fit LinearGAM with cyclic P-splines for hour [0, 24] and day of year [1, 366]
+    gam = LinearGAM(
+        s(0, n_splines=15) +
+        s(1, n_splines=10) +
+        s(2, basis="cp", n_splines=12, edge_knots=[0, 24]) +
+        s(3, basis="cp", n_splines=15, edge_knots=[1, 366])
+    )
     gam.gridsearch(X_gam, y_gam, progress=False)
     
     vre_grid = np.linspace(np.percentile(vre_series, 2), np.percentile(vre_series, 98), 100)
@@ -240,7 +267,7 @@ def compute_h2_gamm_and_threshold(
     p_dep, confi = gam.partial_dependence(term=0, X=XX, width=0.95)
     pseudo_r2 = float(gam.statistics_["pseudo_r2"]["explained_deviance"])
     
-    # 2. Threshold Search with Newey-West HAC Covariance (Hansen 2000, Davies 1987)
+    # 2. Threshold Search with Newey-West HAC Covariance (Hansen 2000)
     cand_gammas = np.percentile(vre_series, np.linspace(15, 85, 50))
     best_gamma = float(cand_gammas[0])
     best_sse = np.inf
@@ -252,6 +279,8 @@ def compute_h2_gamm_and_threshold(
     ols_m0 = sm.OLS(y_gam, X_m0).fit(cov_type="HAC", cov_kwds={"maxlags": 24})
     aic_m0 = ols_m0.aic
     bic_m0 = ols_m0.bic
+    resid_m0 = ols_m0.resid
+    fitted_m0 = ols_m0.fittedvalues
     
     wald_stats = []
     t_stats = []
@@ -275,43 +304,56 @@ def compute_h2_gamm_and_threshold(
     aic_m1 = ols_m1.aic
     bic_m1 = ols_m1.bic
     
-    # 3. Stationary Block Bootstrap for threshold confidence interval (Politis & Romano 1994)
-    block_len = 48  # 48-hour blocks to preserve diurnal autocorrelation
-    n_blocks = len(y_gam) // block_len
-    boot_gammas = []
+    sup_wald = float(np.max(wald_stats))
+    
+    # 3. Hansen (1996) Supremum-Wald Moving-Block Bootstrap Test (B=2000)
+    n = len(y_gam)
+    block_len = 48  # 48-hour blocks preserve diurnal autocorrelation
+    n_blocks = int(np.ceil(n / block_len))
     rng = np.random.RandomState(42)
     
-    for _ in range(n_bootstrap):
-        block_idx = rng.randint(0, n_blocks, size=n_blocks)
-        sample_indices = np.concatenate([np.arange(b * block_len, (b + 1) * block_len) for b in block_idx])
-        y_b = y_gam[sample_indices]
-        vre_b = vre_series[sample_indices]
-        X_ctrl_b = X_ctrl[sample_indices]
+    # Pre-project candidate regressors using Frisch-Waugh-Lovell
+    Q, _ = np.linalg.qr(X_m0)
+    P_perp = lambda V: V - Q @ (Q.T @ V)
+    Z = np.column_stack([np.maximum(0.0, vre_series - g) for g in cand_gammas])
+    Z_tilde = P_perp(Z)
+    z_norms = np.sum(Z_tilde ** 2, axis=0) + 1e-12
+    sigma2_resid = np.var(resid_m0, ddof=X_m0.shape[1])
+    
+    # Bootstrap null distribution of T_sup under H0
+    block_starts_null = rng.randint(0, n - block_len + 1, size=(n_bootstrap, n_blocks))
+    boot_sup_wald = []
+    
+    for b in range(n_bootstrap):
+        indices = np.concatenate([np.arange(st, st + block_len) for st in block_starts_null[b]])[:n]
+        e_b = resid_m0[indices]
+        e_tilde = P_perp(e_b)
+        # Score-based Wald statistic across grid
+        score_wald = ((Z_tilde.T @ e_tilde) ** 2) / (z_norms * sigma2_resid)
+        boot_sup_wald.append(float(np.max(score_wald)))
         
-        b_best_gamma = best_gamma
-        b_best_sse = np.inf
-        for g in cand_gammas[::2]:
-            X_b_seg = np.column_stack([X_ctrl_b, vre_b, np.maximum(0.0, vre_b - g)])
-            try:
-                fit_b = sm.OLS(y_b, X_b_seg).fit()
-                if fit_b.ssr < b_best_sse:
-                    b_best_sse = fit_b.ssr
-                    b_best_gamma = g
-            except Exception:
-                continue
-        boot_gammas.append(b_best_gamma)
+    boot_sup_wald = np.array(boot_sup_wald)
+    # Hansen supremum-Wald bootstrap p-value
+    sup_wald_pval = float((np.sum(boot_sup_wald >= sup_wald) + 1.0) / (n_bootstrap + 1.0))
+    
+    # 4. Moving-Block Bootstrap for Threshold Parameter 95% Confidence Interval (B=2000)
+    block_starts_data = rng.randint(0, n - block_len + 1, size=(n_bootstrap, n_blocks))
+    boot_gammas = []
+    
+    for b in range(n_bootstrap):
+        indices = np.concatenate([np.arange(st, st + block_len) for st in block_starts_data[b]])[:n]
+        y_b = y_gam[indices]
+        X_m0_b = X_m0[indices]
+        Q_b, _ = np.linalg.qr(X_m0_b)
+        P_perp_b = lambda V: V - Q_b @ (Q_b.T @ V)
+        Z_b = np.column_stack([np.maximum(0.0, vre_series[indices] - g) for g in cand_gammas])
+        Z_tilde_b = P_perp_b(Z_b)
+        y_tilde_b = P_perp_b(y_b)
+        z_norms_b = np.sum(Z_tilde_b ** 2, axis=0) + 1e-12
+        ssr_red = ((Z_tilde_b.T @ y_tilde_b) ** 2) / z_norms_b
+        boot_gammas.append(cand_gammas[np.argmax(ssr_red)])
         
     thresh_ci = (float(np.percentile(boot_gammas, 2.5)), float(np.percentile(boot_gammas, 97.5)))
-    
-    # Davies (1987) supremum-Wald test bound with HAC covariance
-    sup_wald = float(np.max(wald_stats))
-    sup_t = float(np.max(t_stats))
-    # Total variation of the square root statistic across the search grid
-    tv = float(np.sum(np.abs(np.diff(t_stats))))
-    # Davies bound: P(sup W > c) <= P(chi^2_1 > c) + tv * c^(0.5) * exp(-c/2) / (2 * pi)^0.5
-    p_chi = stats.chi2.sf(sup_wald, df=1)
-    davies_bound = p_chi + tv * np.exp(-sup_wald / 2.0) / np.sqrt(2.0 * np.pi)
-    davies_pval = float(np.clip(davies_bound, 1e-16, 1.0))
     
     model_comp = pd.DataFrame([
         {"Model": "M0_Linear", "AIC": aic_m0, "BIC": bic_m0, "R2": ols_m0.rsquared},
@@ -327,8 +369,10 @@ def compute_h2_gamm_and_threshold(
         vre_confidence_intervals=confi,
         best_threshold=best_gamma,
         threshold_ci=thresh_ci,
-        davies_pvalue=davies_pval,
-        model_comparison=model_comp
+        davies_pvalue=sup_wald_pval,  # aliased for backward compatibility
+        model_comparison=model_comp,
+        sup_wald_stat=sup_wald,
+        sup_wald_pvalue=sup_wald_pval
     )
 
 
@@ -568,6 +612,10 @@ def compute_h4_walk_forward_forecasting(
         stress_base_dict[h] = stress_rmse_b
         stress_aug_dict[h] = stress_rmse_a
         
+    dm_pvals_arr = np.array([dm_pval_dict[h] for h in horizons])
+    dm_qvals_arr = fdr_bh(dm_pvals_arr)
+    dm_qval_dict = {h: float(q) for h, q in zip(horizons, dm_qvals_arr)}
+        
     return Hypothesis4Result(
         horizons=horizons,
         rmse_baseline=rmse_base_dict,
@@ -578,7 +626,8 @@ def compute_h4_walk_forward_forecasting(
         diebold_mariano_stat=dm_stat_dict,
         diebold_mariano_pvalue=dm_pval_dict,
         stress_tail_rmse_baseline=stress_base_dict,
-        stress_tail_rmse_augmented=stress_aug_dict
+        stress_tail_rmse_augmented=stress_aug_dict,
+        diebold_mariano_qvalue=dm_qval_dict
     )
 
 
