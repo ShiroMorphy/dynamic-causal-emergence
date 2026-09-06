@@ -64,5 +64,5 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 minversion = "7.0"
 addopts = "-ra -q"
-testpaths = ["tests"]
+testpaths = ["tests", "audit_tests"]
 pythonpath = ["src"]

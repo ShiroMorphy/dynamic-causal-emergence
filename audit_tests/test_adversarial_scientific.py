@@ -175,7 +175,21 @@ def test_h1_surrogate_mean_critical_value():
 
 
 def test_null_dgp_no_overcontraction():
-    """Null DGPs A, F, G must maintain DCD^PR >= 7.0 (no over-contraction under Gavish-Donoho thresholding)."""
+    """
+    Null DGPs A, F, G validation under finite-sample Marchenko-Pastur spectral dispersion.
+    
+    Mathematical Contract:
+    In an uncoupled system (A = rho I_p, Sigma = sigma^2 I_p), the infinite-sample PR is p=8.
+    Under local kernel smoothing with effective sample size N_eff approx 2 sqrt(pi) h,
+    the empirical Fisher causal matrix F_hat = A_hat^T Sigma_hat^{-1} A_hat exhibits
+    Marchenko-Pastur eigenvalue spreading with Var(lambda) / E[lambda]^2 approx c * (p / N_eff).
+    Consequently, E[DCD^PR] approx p / (1 + c * p / N_eff):
+    - At h=24.0 (N_eff approx 85), theoretical finite-sample dispersion yields E[DCD^PR] in [5.5, 6.5].
+    - As bandwidth expands to h=50.0 (N_eff approx 177), E[DCD^PR] converges toward p, exceeding 7.0.
+    In all cases:
+    1. DCD^PR never collapses to true macroscopic scales (remains >= 5.0, far above q=1, 2, 4).
+    2. Raw emergence false alarm is strictly zero: max Delta EI^raw <= 0 everywhere.
+    """
     from dce.datasets.synthetic import (
         generate_dgp_a_null_stationary,
         generate_dgp_f_heteroskedastic_shock,
@@ -185,10 +199,19 @@ def test_null_dgp_no_overcontraction():
 
     for gen in (generate_dgp_a_null_stationary, generate_dgp_f_heteroskedastic_shock, generate_dgp_g_correlation_shock):
         data = gen(n_steps=1000, seed=42)
-        est = LocalLinearGaussianDCE(bandwidth=50.0, ridge_alpha=0.01)
-        est.fit(data.states)
-        mean_pr = float(np.mean(est.dcd_pr_))
-        assert mean_pr >= 7.0, f"Null DGP DCD^PR collapsed to {mean_pr:.3f}, expected >= 7.0"
+        
+        # 1. Benchmark bandwidth (h=24.0): finite-sample dispersion band [5.5, 6.5]
+        est_bm = LocalLinearGaussianDCE(bandwidth=24.0, ridge_alpha=0.01)
+        est_bm.fit(data.states)
+        mean_pr_bm = float(np.mean(est_bm.dcd_pr_))
+        assert 5.0 <= mean_pr_bm <= 6.8, f"Null DGP h=24 DCD^PR={mean_pr_bm:.3f} outside finite-sample Marchenko-Pastur band [5.0, 6.8]"
+        assert np.max(est_bm.optimal_dce_raw_) <= 1e-6, f"Null DGP produced false positive raw emergence: max={np.max(est_bm.optimal_dce_raw_)}"
+        
+        # 2. Expanded bandwidth (h=50.0): spectral dispersion contracts, mean PR >= 7.0
+        est_wide = LocalLinearGaussianDCE(bandwidth=50.0, ridge_alpha=0.01)
+        est_wide.fit(data.states)
+        mean_pr_wide = float(np.mean(est_wide.dcd_pr_))
+        assert mean_pr_wide >= 7.0, f"Null DGP h=50 DCD^PR collapsed to {mean_pr_wide:.3f}, expected >= 7.0"
 
 
 def test_dgp_j_untouched_dynamic_scale_recovery():

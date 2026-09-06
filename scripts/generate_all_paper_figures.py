@@ -170,18 +170,22 @@ def generate_figure_4_vre_response(output_path: str = "paper/figures/fig4_vre_no
     
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(7.2, 3.2), gridspec_kw={"wspace": 0.28})
     
-    # Panel A: GAM partial dependence
+    # Panel A: GAM partial dependence aligned with raw DCD scale
     df_ercot = pd.read_parquet("results/empirical/ercot_dce_2021_retrospective.parquet")
     sub_idx = np.linspace(0, len(df_ercot) - 1, 600, dtype=int)
+    mean_dcd = float(np.mean(df_ercot["dcd_pr"]))
+    p_dep_level = p_dep + mean_dcd
+    confi_level = confi + mean_dcd
+
     ax1.scatter(df_ercot["vre_penetration"].values[sub_idx] * 100, df_ercot["dcd_pr"].values[sub_idx],
                 color=COLORS["primary_blue"], alpha=0.15, s=6, label="Hourly Obs")
-    ax1.plot(vre_grid, p_dep, color=COLORS["accent_orange"], lw=2.0, label=r"GAM Spline $s(\text{VRE})$")
-    ax1.fill_between(vre_grid, confi[:, 0], confi[:, 1], color=COLORS["accent_orange"], alpha=0.25, label="95% CI")
+    ax1.plot(vre_grid, p_dep_level, color=COLORS["accent_orange"], lw=2.0, label=r"GAM Spline $\hat{\mathbb{E}}[DCD \mid \text{VRE}, \bar{X}_{\text{ctrl}}]$")
+    ax1.fill_between(vre_grid, confi_level[:, 0], confi_level[:, 1], color=COLORS["accent_orange"], alpha=0.25, label="95% CI")
     p_sup = ercot_h2.get("sup_wald_pvalue", ercot_h2.get("davies_pvalue", 0.787))
     ax1.axvline(gamma, color="firebrick", ls="--", lw=1.4, label=f"Candidate Threshold $\\hat{{\\gamma}}={gamma:.1f}\\%$ (Sup-Wald $p={p_sup:.3f}$)")
     ax1.set_title("a | Nonlinear Causal Response to VRE (ERCOT)", fontweight="bold", loc="left")
     ax1.set_xlabel("Renewable Penetration VRE (%)")
-    ax1.set_ylabel(r"Partial Effect on $DCD_t^{\text{PR}}$")
+    ax1.set_ylabel(r"Dynamic Causal Dimension $DCD_t^{\text{PR}}$")
     ax1.legend(loc="upper left", frameon=True, fontsize=6.5)
     ax1.grid(True)
     

@@ -180,7 +180,6 @@ def format_latex_baseline_table(results=None):
         pca = res["sliding_pca"]
         st = res.get("sliding_unreg_spectrum", res.get("sliding_static_ce", {}))
         dce = res["dce"]
-
         label = descriptions.get(dgp_name, dgp_name)
         p_r = pca.get("rmse")
         p_a = pca.get("acc")
@@ -189,12 +188,32 @@ def format_latex_baseline_table(results=None):
         d_r = dce.get("rmse")
         d_a = dce.get("acc")
 
-        pca_rmse = f"{p_r:.3f}" if p_r is not None else "--"
-        pca_acc = f"{p_a * 100:.1f}\\%" if p_a is not None else "--"
-        st_rmse = f"{s_r:.3f}" if s_r is not None else "--"
-        st_acc = f"{s_a * 100:.1f}\\%" if s_a is not None else "--"
-        dce_rmse = f"{b}textbf{{{d_r:.3f}}}" if d_r is not None else "--"
-        dce_acc = f"{b}textbf{{{d_a * 100:.1f}\\%}}" if d_a is not None else "--"
+        rmses = [p_r, s_r, d_r]
+        valid_rmses = [x for x in rmses if x is not None]
+        min_rmse = min(valid_rmses) if valid_rmses else None
+
+        accs = [p_a, s_a, d_a]
+        valid_accs = [x for x in accs if x is not None]
+        max_acc = max(valid_accs) if valid_accs else None
+
+        def fmt_r(val):
+            if val is None:
+                return "--"
+            s = f"{val:.3f}"
+            return f"{b}textbf{{{s}}}" if min_rmse is not None and abs(val - min_rmse) < 1e-6 else s
+
+        def fmt_a(val):
+            if val is None:
+                return "--"
+            s = f"{val * 100:.1f}\\%"
+            return f"{b}textbf{{{s}}}" if max_acc is not None and abs(val - max_acc) < 1e-6 else s
+
+        pca_rmse = fmt_r(p_r)
+        pca_acc = fmt_a(p_a)
+        st_rmse = fmt_r(s_r)
+        st_acc = fmt_a(s_a)
+        dce_rmse = fmt_r(d_r)
+        dce_acc = fmt_a(d_a)
 
         lines.append(f"{label} & {pca_rmse} & {pca_acc} & {st_rmse} & {st_acc} & {dce_rmse} & {dce_acc} {b}{b}")
 

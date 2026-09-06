@@ -105,8 +105,20 @@ def run_mc_replication(
     max_dce_density = float(np.max(dce_hat_density))
     
     # 2. Causal Dimension Accuracy
-    dim_accuracy_raw = float(np.mean(q_hat_raw == q_true))
-    dim_accuracy_density = float(np.mean(q_hat_density == q_true))
+    q_true_raw = getattr(data, "true_optimal_dim_raw", None)
+    if q_true_raw is None:
+        q_true_raw = q_true
+    else:
+        q_true_raw = q_true_raw[:T_eval]
+
+    q_true_dens = getattr(data, "true_optimal_dim_density", None)
+    if q_true_dens is None:
+        q_true_dens = q_true
+    else:
+        q_true_dens = q_true_dens[:T_eval]
+
+    dim_accuracy_raw = float(np.mean(q_hat_raw == q_true_raw))
+    dim_accuracy_density = float(np.mean(q_hat_density == q_true_dens))
     
     # 2b. Dynamic Causal Dimensionality Metrics
     dcd_pr_hat = getattr(model, "dcd_pr_", None)
@@ -137,6 +149,7 @@ def run_mc_replication(
     # 3. Detection Delay & Detection Success (for transition DGPs)
     detection_delay_density = None
     detection_success_density = None
+    is_dgp_g = "dgp_g" in dgp_name.lower()
     is_null_dgp = ("null" in dgp_name.lower()) or ("shock" in dgp_name.lower())
     
     if data.transition_timestamp is not None and isinstance(data.transition_timestamp, int):
@@ -150,7 +163,12 @@ def run_mc_replication(
             detection_success_density = False
             
     # 4. False Positive / Exceedance
-    if is_null_dgp:
+    if is_dgp_g:
+        # DGP-G is a strict null for raw emergence (Delta EI_raw <= 0, FPR_raw = 0),
+        # but exhibits positive CCG (CCG_true = +0.0838 > 0) during the correlation shock.
+        is_false_alarm_raw = bool(max_dce_raw > 0.0)
+        is_false_alarm_density = None  # N/A: density emergence is truly positive during shock
+    elif is_null_dgp:
         is_false_alarm_raw = bool(max_dce_raw > 0.0) # Raw strict emergence impossible under linear coarse-graining
         is_false_alarm_density = bool(max_dce_density > threshold)
     else:
@@ -245,11 +263,17 @@ def run_monte_carlo_suite(
         ]
         
     fa_raw = [1 if r["is_false_alarm_raw"] else 0 for r in reps_data]
-    fa_dens = [1 if r["is_false_alarm_density"] else 0 for r in reps_data]
-    k_raw = sum(fa_raw)
-    k_dens = sum(fa_dens)
-    ci_raw_low, ci_raw_high = clopper_pearson_ci(k_raw, n_reps)
-    ci_dens_low, ci_dens_high = clopper_pearson_ci(k_dens, n_reps)
+    fa_dens_valid = [1 if r["is_false_alarm_density"] else 0 for r in reps_data if r["is_false_alarm_density"] is not None]
+    if len(fa_dens_valid) > 0:
+        k_dens = sum(fa_dens_valid)
+        fpr_density = float(k_dens / len(fa_dens_valid))
+        ci_dens_low, ci_dens_high = clopper_pearson_ci(k_dens, len(fa_dens_valid))
+        ci_dens = [ci_dens_low, ci_dens_high]
+    else:
+        k_dens = None
+        fpr_density = None
+        ci_dens = None
+    ci_raw_low, ci_raw_high = clopper_pearson_ci(sum(fa_raw), n_reps)
     
     dcd_pr_rmses = [r["rmse_dcd_pr"] for r in reps_data if r["rmse_dcd_pr"] is not None]
     dcd_pr_biases = [r["mean_bias_dcd_pr"] for r in reps_data if r["mean_bias_dcd_pr"] is not None]
@@ -265,10 +289,10 @@ def run_monte_carlo_suite(
         "bandwidth": bandwidth,
         "causal_only": causal_only,
         "threshold": threshold,
-        "fpr_raw": float(k_raw / n_reps),
+        "fpr_raw": float(sum(fa_raw) / n_reps),
         "fpr_raw_ci95": [ci_raw_low, ci_raw_high],
-        "fpr_density": float(k_dens / n_reps),
-        "fpr_density_ci95": [ci_dens_low, ci_dens_high],
+        "fpr_density": fpr_density,
+        "fpr_density_ci95": ci_dens,
         "mean_rmse_dcd_pr": float(np.mean(dcd_pr_rmses)) if dcd_pr_rmses else None,
         "std_rmse_dcd_pr": float(np.std(dcd_pr_rmses)) if dcd_pr_rmses else None,
         "mean_bias_dcd_pr": float(np.mean(dcd_pr_biases)) if dcd_pr_biases else None,
@@ -286,7 +310,7 @@ def run_monte_carlo_suite(
         "mean_detection_delay": float(np.mean(delays)) if delays else None,
         "median_detection_delay": float(np.median(delays)) if delays else None,
         # Backward-compatible summary fields
-        "fpr": float(k_dens / n_reps),
+        "fpr": fpr_density,
         "mean_rmse": float(np.mean([r["rmse_density"] for r in reps_data])),
         "std_rmse": float(np.std([r["rmse_density"] for r in reps_data])),
         "mean_bias": float(np.mean([r["mean_bias_density"] for r in reps_data])),
@@ -313,6 +337,12 @@ def main():
     
     dgps_to_run = list(SYNTHETIC_DGP_REGISTRY.keys()) if args.all_dgps else [args.dgp]
     consolidated = {}
+    if args.output and os.path.exists(args.output):
+        try:
+            with open(args.output, "r") as f:
+                consolidated = json.load(f)
+        except Exception:
+            consolidated = {}
     
     for dgp_name in dgps_to_run:
         print(f"--> Running Monte Carlo on {dgp_name} (R={args.reps}, T={args.n_steps})...")
@@ -332,7 +362,8 @@ def main():
         with open(dgp_out_path, "w") as f:
             json.dump(full_res, f, indent=2)
             
-        print(f"Finished {dgp_name}: FPR_raw={full_res['summary']['fpr_raw']:.3f}, FPR_dens={full_res['summary']['fpr_density']:.3f}, RMSE={full_res['summary']['mean_rmse_density']:.4f}")
+        fpr_d_str = f"{full_res['summary']['fpr_density']:.3f}" if full_res['summary']['fpr_density'] is not None else "N/A"
+        print(f"Finished {dgp_name}: FPR_raw={full_res['summary']['fpr_raw']:.3f}, FPR_dens={fpr_d_str}, RMSE={full_res['summary']['mean_rmse_density']:.4f}")
 
     if args.output:
         os.makedirs(os.path.dirname(os.path.abspath(args.output)), exist_ok=True)

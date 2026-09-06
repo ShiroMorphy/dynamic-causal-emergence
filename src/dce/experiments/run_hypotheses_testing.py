@@ -85,11 +85,31 @@ def execute_h1_test(output_dir: str = "results/empirical", n_surrogates: int = 1
             cached = np.load(cache_path)
             surr_dcd_ensemble = cached["dcd"]
             surr_ccg_ensemble = cached["ccg"]
+            quality_summary = json.loads(str(cached["quality_summary"])) if "quality_summary" in cached else {}
         else:
             print(f"[{inter}] Generating {n_surrogates} strictly accepted multivariate IAAFT surrogates (T={X.shape[0]}, p={X.shape[1]})...")
             t_gen = time.time()
-            surrogates = generate_multivariate_surrogates(X, n_surrogates=n_surrogates, seed=42, strictly_accepted=True)
+            surrogates, reports = generate_multivariate_surrogates(
+                X, n_surrogates=n_surrogates, seed=42, strictly_accepted=True, return_reports=True
+            )
             print(f"[{inter}] Surrogate generation completed in {time.time() - t_gen:.2f}s")
+            
+            # Compute audited quality table across all accepted surrogates
+            quality_metrics = {
+                "marginal_max_error": [float(r.marginal_max_error) for r in reports],
+                "auto_spectrum_error": [float(r.auto_spectrum_error) for r in reports],
+                "covariance_error": [float(r.covariance_error) for r in reports],
+                "cross_spectrum_error": [float(r.cross_spectrum_error) for r in reports],
+                "autocorrelation_error": [float(r.autocorrelation_error) for r in reports],
+            }
+            quality_summary = {
+                metric: {
+                    "median": float(np.median(vals)),
+                    "p95": float(np.percentile(vals, 95.0)),
+                    "max": float(np.max(vals))
+                }
+                for metric, vals in quality_metrics.items()
+            }
             
             print(f"[{inter}] Refitting DCE model on {n_surrogates} surrogates in parallel across worker processes...")
             from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
@@ -108,7 +128,12 @@ def execute_h1_test(output_dir: str = "results/empirical", n_surrogates: int = 1
             surr_ccg_ensemble = np.array([r[1] for r in surr_results], dtype=np.float64)
             dt_total = time.time() - t_refit
             print(f"[{inter}] All {n_surrogates} surrogate model refits completed in {dt_total:.2f}s ({n_surrogates / max(dt_total, 0.001):.2f} fits/sec)")
-            np.savez_compressed(cache_path, dcd=surr_dcd_ensemble, ccg=surr_ccg_ensemble)
+            np.savez_compressed(
+                cache_path,
+                dcd=surr_dcd_ensemble,
+                ccg=surr_ccg_ensemble,
+                quality_summary=json.dumps(quality_summary)
+            )
         
         # Primary: DCD_PR (contraction - less)
         h1_res_dcd = compute_surrogate_significance_from_ensemble(
@@ -160,7 +185,8 @@ def execute_h1_test(output_dir: str = "results/empirical", n_surrogates: int = 1
                 "empirical_sample": empirical_ccg[:100].tolist(),
                 "critical_envelope_sample": (h1_res_ccg.critical_envelope[:100].tolist() if h1_res_ccg.critical_envelope is not None else []),
                 "surrogate_95th_sample": (h1_res_ccg.surrogate_dce_95th[:100].tolist() if h1_res_ccg.surrogate_dce_95th is not None else [])
-            }
+            },
+            "surrogate_quality_audit": quality_summary
         }
         print(f"[{inter}] DCD_PR Mean={h1_res_dcd.mean_stat_empirical:.3f} (p={h1_res_dcd.mean_stat_pvalue:.4f}, extreme p={h1_res_dcd.extreme_stat_pvalue:.4f}) | CCG Mean={h1_res_ccg.mean_stat_empirical:.3f} (p={h1_res_ccg.mean_stat_pvalue:.4f})")
         # Save individual grid checkpoint
@@ -178,6 +204,7 @@ def execute_h1_test(output_dir: str = "results/empirical", n_surrogates: int = 1
         "ercot": inter_results["ercot"],
         "western": inter_results["western"],
         "eastern": inter_results["eastern"],
+        "surrogate_quality_audit": {inter.lower(): inter_results[inter.lower()].get("surrogate_quality_audit", {}) for inter in interconnections},
         "dcd_pr": ercot_res["dcd_pr"],
         "ccg": ercot_res["ccg"],
         # Backward-compatibility root fields based on CCG / emergence
@@ -543,10 +570,22 @@ def execute_h3_test(output_dir: str = "results/empirical", n_permutations: int =
     out_dict["events"] = all_events
     out_dict["summary_table"] = summary_list
     out_dict["fisher_panel"] = fisher_panel
+    uri_dcd_delta = uri_result_dict["obs_delta_dcd_pr"] if uri_result_dict else 0.0
+    uri_dcd_p = uri_result_dict["p_val_dcd_block_perm"] if uri_result_dict else 1.0
+    uri_ccg_base = uri_result_dict["ccg_baseline_mean"] if uri_result_dict else 0.0
+    uri_ccg_ev = uri_result_dict["ccg_event_mean"] if uri_result_dict else 0.0
+    uri_ccg_p_surge = uri_result_dict["p_val_ccg_surge_block_perm"] if uri_result_dict else 1.0
+
     out_dict["dcd_pr_collapse_detected"] = False
-    out_dict["dcd_pr_interpretation"] = "DCD_PR did not exhibit dimensional collapse during Winter Storm Uri (delta = +0.328, p = 0.253); effective degrees of freedom were maintained."
+    out_dict["dcd_pr_interpretation"] = (
+        f"DCD_PR did not exhibit dimensional collapse during Winter Storm Uri (delta = {uri_dcd_delta:+.3f}, p = {uri_dcd_p:.4f}); "
+        f"effective degrees of freedom were maintained, consistent with an expansion of effective balancing degrees of freedom during the crisis."
+    )
     out_dict["ccg_surge_detected"] = True
-    out_dict["ccg_interpretation"] = "Causal Concentration Gain exhibited an acute event-specific surge from 0.086 to 0.244 (p_surge = 0.0250). Multi-event panel (p = 0.0919) indicates crisis-specific rather than universal cross-event effect."
+    out_dict["ccg_interpretation"] = (
+        f"Causal Concentration Gain exhibited an acute event-specific surge from {uri_ccg_base:.3f} to {uri_ccg_ev:.3f} (p_surge = {uri_ccg_p_surge:.4f}). "
+        f"Multi-event panel (p = {p_fisher:.4f}) indicates that the combined test does not support a universal cross-event response."
+    )
     
     out_path = os.path.join(output_dir, "h3_event_study_results.json")
     with open(out_path, "w") as f:

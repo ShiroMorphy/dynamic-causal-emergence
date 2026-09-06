@@ -8,7 +8,7 @@ Implements:
 """
 
 import os
-from typing import List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
 
 
@@ -137,30 +137,33 @@ def generate_multivariate_iaaft_surrogate(
     return s_final
 
 
-def _evaluate_surrogate_candidate(args: Tuple[np.ndarray, int]) -> Tuple[int, Optional[np.ndarray], bool]:
+def _evaluate_surrogate_candidate(args: Tuple[np.ndarray, int]) -> Tuple[int, Optional[np.ndarray], bool, Any]:
     """Worker function to generate and validate a single candidate surrogate realization."""
     X, surr_seed = args
     from dce.stats.surrogate_validation import evaluate_surrogate_quality
     surr = generate_multivariate_iaaft_surrogate(X, seed=surr_seed)
     report = evaluate_surrogate_quality(X, surr)
-    return surr_seed, (surr if report.accepted else None), report.accepted
+    return surr_seed, (surr if report.accepted else None), report.accepted, report
 
 
 def generate_accepted_multivariate_surrogates(
     X: np.ndarray,
     n_surrogates: int = 1000,
     seed: int = 42,
-    max_attempts_factor: int = 5
-) -> List[np.ndarray]:
+    max_attempts_factor: int = 5,
+    return_reports: bool = False
+) -> Union[List[np.ndarray], Tuple[List[np.ndarray], List[Any]]]:
     """
     Generate an ensemble of multivariate IAAFT surrogates where EVERY realization
     is strictly validated and accepted according to the frozen three-tier quality contract.
     Accelerated with multi-core batch processing while maintaining 100% deterministic candidate evaluation order.
+    FAILS HARD if accepted < n_surrogates within max_attempts; NEVER silently backfills with unvalidated realizations.
     """
     from concurrent.futures import ProcessPoolExecutor
     from dce.stats.surrogate_validation import evaluate_surrogate_quality
     
     accepted_surrogates: List[np.ndarray] = []
+    accepted_reports: List[Any] = []
     max_attempts = n_surrogates * max_attempts_factor
     workers = min(32, max(1, (os.cpu_count() or 4) - 1))
     
@@ -173,6 +176,7 @@ def generate_accepted_multivariate_surrogates(
             report = evaluate_surrogate_quality(X, surr)
             if report.accepted:
                 accepted_surrogates.append(surr)
+                accepted_reports.append(report)
             attempt += 1
     else:
         # Parallel batched evaluation: evaluates in strictly ordered seed batches
@@ -185,18 +189,21 @@ def generate_accepted_multivariate_surrogates(
                 results = list(executor.map(_evaluate_surrogate_candidate, candidate_args))
                 # Sort by seed to preserve strictly sequential candidate evaluation order
                 results.sort(key=lambda r: r[0])
-                for _, surr, ok in results:
+                for _, surr, ok, rep in results:
                     if ok and len(accepted_surrogates) < n_surrogates:
                         accepted_surrogates.append(surr)
+                        accepted_reports.append(rep)
                 attempt += current_batch_size
         
     if len(accepted_surrogates) < n_surrogates:
-        print(f"Warning: Only {len(accepted_surrogates)}/{n_surrogates} passed strict acceptance within {max_attempts} attempts.")
-        # Fallback: fill up if needed
-        while len(accepted_surrogates) < n_surrogates:
-            surr = generate_multivariate_iaaft_surrogate(X, seed=seed + len(accepted_surrogates) * 1000)
-            accepted_surrogates.append(surr)
+        raise RuntimeError(
+            f"Fail-Hard Contract: Only {len(accepted_surrogates)}/{n_surrogates} surrogates "
+            f"passed strict acceptance within {max_attempts} attempts. "
+            f"Refusing to backfill with unvalidated surrogates."
+        )
             
+    if return_reports:
+        return accepted_surrogates, accepted_reports
     return accepted_surrogates
 
 
@@ -205,18 +212,23 @@ def generate_multivariate_surrogates(
     n_surrogates: int = 100,
     method: str = "iaaft",
     seed: int = 42,
-    strictly_accepted: bool = False
-) -> List[np.ndarray]:
+    strictly_accepted: bool = False,
+    return_reports: bool = False
+) -> Union[List[np.ndarray], Tuple[List[np.ndarray], List[Any]]]:
     """
     Generate ensemble of multivariate surrogates preserving marginal distributions and cross-correlations.
     """
     if strictly_accepted:
-        return generate_accepted_multivariate_surrogates(X, n_surrogates=n_surrogates, seed=seed)
+        return generate_accepted_multivariate_surrogates(
+            X, n_surrogates=n_surrogates, seed=seed, return_reports=return_reports
+        )
         
     surrogates = []
     for b in range(n_surrogates):
         surr_b = generate_multivariate_iaaft_surrogate(X, seed=seed + b * 1000)
         surrogates.append(surr_b)
+    if return_reports:
+        return surrogates, []
     return surrogates
 
 

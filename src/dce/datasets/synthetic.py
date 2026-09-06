@@ -33,6 +33,8 @@ class SyntheticBenchmarkData(NamedTuple):
     true_dcd_pr: Optional[np.ndarray] = None        # (T-1,) Exact analytical Participation Ratio
     true_dcd_entropy: Optional[np.ndarray] = None   # (T-1,) Exact analytical Causal Effective Rank
     true_q90: Optional[np.ndarray] = None           # (T-1,) Exact analytical 90% causal dimension
+    true_optimal_dim_raw: Optional[np.ndarray] = None     # (T-1,) Exact optimal dimension under raw emergence (usually p)
+    true_optimal_dim_density: Optional[np.ndarray] = None # (T-1,) Exact optimal dimension under density emergence (q*)
 
 
 def compute_linear_gaussian_dcd_ground_truth(
@@ -348,8 +350,11 @@ def generate_dgp_d_smooth_drift(
         Sigma_w = np.zeros((p_dim, p_dim), dtype=np.float64)
         for c in range(q_dim):
             s = slice(c * cluster_size, (c + 1) * cluster_size)
-            Sigma_w[s, s] = (sig_micro_w ** 2) * (np.eye(cluster_size) - (w / cluster_size) * (np.ones((cluster_size, cluster_size)) - np.eye(cluster_size)) / max(1, cluster_size - 1))
-            Sigma_w[s, s] = 0.5 * (Sigma_w[s, s] + Sigma_w[s, s].T) + 1e-6 * np.eye(cluster_size)
+            J_k = np.ones((cluster_size, cluster_size), dtype=np.float64)
+            # Exact analytical covariance of simulated noise epsilon = (I - (w/k) J_k) z:
+            # Sigma_sim = sigma^2 (I - ((2w - w^2) / k) J_k)
+            Sigma_w[s, s] = (sig_micro_w ** 2) * (np.eye(cluster_size) - ((2.0 * w - w ** 2) / cluster_size) * J_k) + 1e-6 * np.eye(cluster_size)
+            Sigma_w[s, s] = 0.5 * (Sigma_w[s, s] + Sigma_w[s, s].T)
         _, _, d_raw, d_dens = compute_linear_gaussian_dce_ground_truth(A_w, Sigma_w, q_dim)
         pr_w, ent_w, q90_w = compute_linear_gaussian_dcd_ground_truth(A_w, Sigma_w)
         grid_raw.append(d_raw)
@@ -370,10 +375,9 @@ def generate_dgp_d_smooth_drift(
         A_t = (1.0 - weight) * A_0 + weight * A_1
         
         micro_noise = rng.randn(p_dim) * noise_level * (1.0 + 1.5 * weight)
-        if weight > 0.1:
-            for c in range(q_dim):
-                c_slice = slice(c * cluster_size, (c + 1) * cluster_size)
-                micro_noise[c_slice] -= weight * np.mean(micro_noise[c_slice])
+        for c in range(q_dim):
+            c_slice = slice(c * cluster_size, (c + 1) * cluster_size)
+            micro_noise[c_slice] -= weight * np.mean(micro_noise[c_slice])
         states[t + 1] = A_t @ states[t] + micro_noise
         
     return SyntheticBenchmarkData(
@@ -387,7 +391,9 @@ def generate_dgp_d_smooth_drift(
         true_dce_density=true_dce_density,
         true_dcd_pr=true_dcd_pr,
         true_dcd_entropy=true_dcd_entropy,
-        true_q90=true_q90
+        true_q90=true_q90,
+        true_optimal_dim_raw=np.full(n_steps - 1, p_dim, dtype=np.int32),
+        true_optimal_dim_density=true_optimal_dim
     )
 
 
@@ -632,7 +638,9 @@ def generate_dgp_g_correlation_shock(
         true_dce_density=true_dce_density,
         true_dcd_pr=true_dcd_pr,
         true_dcd_entropy=true_dcd_entropy,
-        true_q90=true_q90
+        true_q90=true_q90,
+        true_optimal_dim_raw=np.full(n_steps - 1, p_dim, dtype=np.int32),
+        true_optimal_dim_density=true_optimal_dim
     )
 
 
