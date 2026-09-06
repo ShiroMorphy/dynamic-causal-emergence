@@ -43,6 +43,7 @@ class CausalSpectrumReport(NamedTuple):
     dcd_pr: float                  # Causal Participation Ratio (sum e_i)^2 / sum e_i^2
     dcd_entropy: float             # Causal Effective Rank exp(-sum pi_i ln pi_i)
     normalized_weights: np.ndarray # pi_i = e_i / EI
+    projection_v: Optional[np.ndarray] = None # Fisher causal right-singular vectors (columns of V in M = U S V^T)
 
 
 def _stable_logdet(matrix: np.ndarray, reg: float = 1e-8, max_condition: float = 1e8) -> float:
@@ -163,7 +164,9 @@ def compute_causal_spectrum(
     transition_matrix_A: np.ndarray,
     noise_covariance_Sigma: np.ndarray,
     regularization: float = 1e-8,
-    zero_threshold: float = 1e-12
+    zero_threshold: float = 1e-12,
+    n_eff: Optional[float] = None,
+    denoising: Optional[str] = "marchenko_pastur"
 ) -> CausalSpectrumReport:
     """
     Compute exact Causal Information Spectrum and Dynamic Causal Dimensionality (DCD).
@@ -176,7 +179,10 @@ def compute_causal_spectrum(
         DCD^{entropy} = exp(-sum pi_i ln pi_i) where pi_i = e_i / EI
         
     Numerically stable via Cholesky factor L of Sigma and SVD of M = L^{-1} A,
-    guaranteeing real non-negative eigenvalues and exact rotational invariance.
+    guaranteeing real non-negative eigenvalues, Fisher causal projection vectors V,
+    and exact rotational invariance.
+    When n_eff is provided and denoising is enabled, applies Marchenko-Pastur bulk
+    thresholding to suppress finite-sample noise modes.
     """
     A_arr = np.asarray(transition_matrix_A, dtype=np.float64)
     Sigma_arr = np.asarray(noise_covariance_Sigma, dtype=np.float64)
@@ -196,7 +202,8 @@ def compute_causal_spectrum(
             effective_information=0.0,
             dcd_pr=0.0,
             dcd_entropy=0.0,
-            normalized_weights=np.zeros(d, dtype=np.float64)
+            normalized_weights=np.zeros(d, dtype=np.float64),
+            projection_v=np.eye(d, dtype=np.float64)
         )
         
     # Symmetrize and regularize Sigma
@@ -213,10 +220,26 @@ def compute_causal_spectrum(
         w_clipped = np.maximum(w_eigs, max(regularization, 1e-12))
         M = (v_eigs.T @ A_arr) / np.sqrt(w_clipped)[:, np.newaxis]
     
-    # Singular values s_i of M: s_i >= 0 sorted descending
-    # lambda_i of Sigma^{-1} A A^T are s_i^2
-    s = scipy.linalg.svdvals(M)
+    # Singular values s_i and right-singular vectors V of M:
+    # M = U S Vt, so V = Vt.T has columns corresponding to the eigenvectors of
+    # Fisher causal operator F = A^T Sigma^{-1} A = V diag(s^2) V^T
+    try:
+        U, s, Vt = scipy.linalg.svd(M, full_matrices=False)
+        V = Vt.T
+    except np.linalg.LinAlgError:
+        s = scipy.linalg.svdvals(M)
+        V = np.eye(d, dtype=np.float64)
+        
     lambdas = np.maximum(s ** 2, 0.0)
+    
+    # Finite-sample Marchenko-Pastur bulk denoising
+    if n_eff is not None and denoising is not None and n_eff > 0:
+        gamma = min(0.85, float(d) / float(n_eff))
+        lambda_cut = ((1.0 + np.sqrt(gamma)) / (1.0 - np.sqrt(gamma))) ** 2 - 1.0
+        if denoising in ("marchenko_pastur", "soft"):
+            lambdas = np.maximum(0.0, lambdas - lambda_cut)
+        elif denoising == "hard":
+            lambdas = np.where(lambdas > lambda_cut, lambdas, 0.0)
     
     # Causal spectrum e_i = 0.5 * ln(1 + lambda_i)
     e_spectrum = 0.5 * np.log1p(lambdas)
@@ -241,8 +264,10 @@ def compute_causal_spectrum(
         effective_information=total_ei,
         dcd_pr=dcd_pr,
         dcd_entropy=dcd_entropy,
-        normalized_weights=pi
+        normalized_weights=pi,
+        projection_v=V
     )
+
 
 
 def compute_dce_raw(micro_ei: float, macro_ei: float) -> float:

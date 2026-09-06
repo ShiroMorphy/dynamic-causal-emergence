@@ -39,9 +39,9 @@ def run_mc_replication(
     n_steps: int = 600,
     threshold: float = 0.05
 ) -> Dict[str, Any]:
-    """Execute a single Monte Carlo evaluation on given DGP with fixed seed."""
     macro_dims = macro_dims or [1, 2, 4, 8]
-    data = get_synthetic_benchmark(dgp_name, n_steps=n_steps, seed=seed)
+    actual_steps = max(n_steps, 1200) if str(dgp_name).lower().replace("-", "_") in ("dgp_e", "e") else n_steps
+    data = get_synthetic_benchmark(dgp_name, n_steps=actual_steps, seed=seed)
     
     # Instantiate estimator
     if estimator_name == "linear_gaussian":

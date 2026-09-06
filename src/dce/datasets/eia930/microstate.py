@@ -99,10 +99,14 @@ def build_power_grid_microstate(
     micro_mat = np.zeros((n_timestamps, p_dim), dtype=np.float64)
     feature_names = []
     
+    is_causal = (scaling == "causal_rolling")
     for idx, var in enumerate(variables):
         if var in df_sorted.columns:
             pivoted = df_sorted.pivot(index="timestamp", columns="ba_code", values=var).reindex(timestamps)
-            pivoted = pivoted.ffill().bfill().fillna(0.0)
+            if is_causal:
+                pivoted = pivoted.ffill().fillna(0.0)
+            else:
+                pivoted = pivoted.ffill().bfill().fillna(0.0)
             values = pivoted.values
         else:
             values = np.zeros((n_timestamps, n_bas), dtype=np.float64)
@@ -141,20 +145,26 @@ def build_power_grid_microstate(
     # 2. RTO (if rto column exists)
     if "rto" in df_sorted.columns and df_sorted["rto"].nunique() > 1:
         rto_df = df_sorted.groupby(["timestamp", "rto"])[variables].sum().reset_index()
-        rto_mat = np.column_stack([
-            rto_df.pivot(index="timestamp", columns="rto", values=var).reindex(timestamps).ffill().bfill().fillna(0.0).values
-            for var in variables if var in rto_df.columns
-        ])
+        rto_cols = []
+        for var in variables:
+            if var in rto_df.columns:
+                piv = rto_df.pivot(index="timestamp", columns="rto", values=var).reindex(timestamps)
+                piv = piv.ffill().fillna(0.0) if is_causal else piv.ffill().bfill().fillna(0.0)
+                rto_cols.append(piv.values)
+        rto_mat = np.column_stack(rto_cols)
     else:
         rto_mat = micro_mat
         
     # 3. Interconnection
     if "interconnection" in df_sorted.columns and df_sorted["interconnection"].nunique() > 1:
         inter_df = df_sorted.groupby(["timestamp", "interconnection"])[variables].sum().reset_index()
-        inter_mat = np.column_stack([
-            inter_df.pivot(index="timestamp", columns="interconnection", values=var).reindex(timestamps).ffill().bfill().fillna(0.0).values
-            for var in variables if var in inter_df.columns
-        ])
+        inter_cols = []
+        for var in variables:
+            if var in inter_df.columns:
+                piv = inter_df.pivot(index="timestamp", columns="interconnection", values=var).reindex(timestamps)
+                piv = piv.ffill().fillna(0.0) if is_causal else piv.ffill().bfill().fillna(0.0)
+                inter_cols.append(piv.values)
+        inter_mat = np.column_stack(inter_cols)
     else:
         inter_mat = micro_mat
         

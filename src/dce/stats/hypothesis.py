@@ -34,6 +34,7 @@ class Hypothesis1Result(NamedTuple):
     extreme_stat_pvalue: float = 0.0
     critical_envelope: Optional[np.ndarray] = None
     test_direction: str = "greater"
+    critical_value_mean: Optional[float] = None
 
     @property
     def significant_ratio(self) -> float:
@@ -155,11 +156,14 @@ def compute_surrogate_significance_from_ensemble(
     t_mean_surr = np.mean(surr_dce_ensemble, axis=1)
     if test_direction == "less":
         p_mean = float((np.sum(t_mean_surr <= t_mean_emp) + 1.0) / (n_surrogates + 1.0))
+        critical_val_mean = float(np.percentile(t_mean_surr, 5.0))
     elif test_direction == "two-sided":
         grand_surr_mean = float(np.mean(t_mean_surr))
         p_mean = float((np.sum(np.abs(t_mean_surr - grand_surr_mean) >= np.abs(t_mean_emp - grand_surr_mean)) + 1.0) / (n_surrogates + 1.0))
+        critical_val_mean = float(np.percentile(np.abs(t_mean_surr - grand_surr_mean), 95.0))
     else:
         p_mean = float((np.sum(t_mean_surr >= t_mean_emp) + 1.0) / (n_surrogates + 1.0))
+        critical_val_mean = float(np.percentile(t_mean_surr, 95.0))
     
     surr_95th = critical_env  # for backward compatibility
     
@@ -177,7 +181,8 @@ def compute_surrogate_significance_from_ensemble(
         extreme_stat_empirical=t_ext_emp,
         extreme_stat_pvalue=p_ext,
         critical_envelope=critical_env,
-        test_direction=test_direction
+        test_direction=test_direction,
+        critical_value_mean=critical_val_mean
     )
 
 

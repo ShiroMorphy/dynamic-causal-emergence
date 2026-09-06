@@ -133,6 +133,7 @@ def execute_h1_test(output_dir: str = "results/empirical", n_surrogates: int = 1
                 "n_surrogates": n_surrogates,
                 "mean_stat_empirical": h1_res_dcd.mean_stat_empirical,
                 "mean_stat_pvalue": h1_res_dcd.mean_stat_pvalue,
+                "critical_value_mean": h1_res_dcd.critical_value_mean,
                 "extreme_stat_empirical": h1_res_dcd.extreme_stat_empirical,
                 "extreme_stat_pvalue": h1_res_dcd.extreme_stat_pvalue,
                 "max_stat_empirical": h1_res_dcd.max_stat_empirical,
@@ -144,9 +145,12 @@ def execute_h1_test(output_dir: str = "results/empirical", n_surrogates: int = 1
                 "surrogate_95th_sample": h1_res_dcd.surrogate_dce_95th[:100].tolist()
             },
             "ccg": {
+                "label": "CCG_t(q=2)",
+                "macro_dimension_q": 2,
                 "n_surrogates": n_surrogates,
                 "mean_stat_empirical": h1_res_ccg.mean_stat_empirical,
                 "mean_stat_pvalue": h1_res_ccg.mean_stat_pvalue,
+                "critical_value_mean": h1_res_ccg.critical_value_mean,
                 "extreme_stat_empirical": h1_res_ccg.extreme_stat_empirical,
                 "extreme_stat_pvalue": h1_res_ccg.extreme_stat_pvalue,
                 "max_stat_empirical": h1_res_ccg.max_stat_empirical,

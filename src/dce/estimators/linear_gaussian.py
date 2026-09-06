@@ -36,7 +36,7 @@ class LocalLinearGaussianDCE(BaseDynamicCE):
         kernel_type: str = "gaussian",
         causal_only: bool = False,
         intervention: Union[str, BaseIntervention] = "gaussian",
-        ridge_alpha: float = 1e-4,
+        ridge_alpha: float = 0.01,
         confidence_delta: float = 0.05,
         selection_criterion: str = "raw",
         verbose: bool = False
@@ -132,12 +132,14 @@ class LocalLinearGaussianDCE(BaseDynamicCE):
             # Symmetrize and regularize Sig_X_t
             Sig_X_t = 0.5 * (Sig_X_t + Sig_X_t.T) + 1e-6 * np.eye(p_dim)
             
+            oracle_reg = min(self.ridge_alpha, 1e-6) if self.ridge_alpha > 0 else 0.0
+            
             # 1. Exact Microscopic EI and Causal Spectrum
             micro_decomp = compute_gaussian_effective_information(
-                A_t, Sig_t, intervention=self.intervention, regularization=self.ridge_alpha
+                A_t, Sig_t, intervention=self.intervention, regularization=oracle_reg
             )
             self.micro_ei_[t] = micro_decomp.effective_information
-            spec_rep = compute_causal_spectrum(A_t, Sig_t, regularization=self.ridge_alpha)
+            spec_rep = compute_causal_spectrum(A_t, Sig_t, regularization=oracle_reg)
             self.dcd_pr_[t] = spec_rep.dcd_pr
             self.dcd_entropy_[t] = spec_rep.dcd_entropy
             self.causal_spectrum_[t] = spec_rep.spectrum
@@ -156,13 +158,16 @@ class LocalLinearGaussianDCE(BaseDynamicCE):
                     proj = projections[q]
                     W_t = proj[t] if (isinstance(proj, list) or proj.ndim == 3) else proj
                 else:
-                    _, _, vt = np.linalg.svd(A_t, full_matrices=False)
-                    W_t = vt[:q, :].T
+                    if spec_rep.projection_v is not None:
+                        W_t = spec_rep.projection_v[:, :q]
+                    else:
+                        _, _, vt = np.linalg.svd(A_t, full_matrices=False)
+                        W_t = vt[:q, :].T
                     
                 self.projections_[q].append(W_t)
                 
                 # Projected macro state covariance: Cov(V_t) = W_t^T Sigma_{X, t} W_t
-                cov_v_t = W_t.T @ Sig_X_t @ W_t + self.ridge_alpha * np.eye(q)
+                cov_v_t = W_t.T @ Sig_X_t @ W_t + oracle_reg * np.eye(q)
                 cov_v_t_cross = W_t.T @ A_t @ Sig_X_t @ W_t
                 
                 # Conditional linear projection dynamics: V_{t+1} = B_t V_t + eta_t
@@ -173,10 +178,10 @@ class LocalLinearGaussianDCE(BaseDynamicCE):
                     
                 cov_v_next = W_t.T @ (A_t @ Sig_X_t @ A_t.T + Sig_t) @ W_t
                 Sig_macro = cov_v_next - B_macro @ cov_v_t @ B_macro.T
-                Sig_macro = 0.5 * (Sig_macro + Sig_macro.T) + max(self.ridge_alpha, 1e-6) * np.eye(q)
+                Sig_macro = 0.5 * (Sig_macro + Sig_macro.T) + max(oracle_reg, 1e-12) * np.eye(q)
                 
                 macro_decomp = compute_gaussian_effective_information(
-                    B_macro, Sig_macro, intervention=self.intervention, regularization=self.ridge_alpha
+                    B_macro, Sig_macro, intervention=self.intervention, regularization=oracle_reg
                 )
                 self.macro_ei_[q][t] = macro_decomp.effective_information
                 self.dce_raw_[q][t] = macro_decomp.effective_information - self.micro_ei_[t]
@@ -228,6 +233,12 @@ class LocalLinearGaussianDCE(BaseDynamicCE):
                 eff_idx = np.sort(eff_idx)
                 
             w_eff = weights[eff_idx]
+            sum_w = np.sum(w_eff)
+            if sum_w > 1e-12:
+                w_norm = w_eff / sum_w
+                n_eff = float(1.0 / np.sum(w_norm ** 2))
+            else:
+                n_eff = float(len(eff_idx))
             x_past_eff = x_past[eff_idx]
             x_future_eff = x_future[eff_idx]
             
@@ -239,15 +250,15 @@ class LocalLinearGaussianDCE(BaseDynamicCE):
                 a_micro, sig_micro, intervention=self.intervention, regularization=self.ridge_alpha
             )
             self.micro_ei_[t] = micro_decomp.effective_information
-            spec_rep = compute_causal_spectrum(a_micro, sig_micro, regularization=self.ridge_alpha)
+            spec_rep = compute_causal_spectrum(
+                a_micro, sig_micro, regularization=self.ridge_alpha, n_eff=n_eff
+            )
             self.dcd_pr_[t] = spec_rep.dcd_pr
             self.dcd_entropy_[t] = spec_rep.dcd_entropy
             self.causal_spectrum_[t] = spec_rep.spectrum
             
-            # Dynamic projection via local weighted PCA/SVD
-            w_sqrt = np.sqrt(w_eff)[:, np.newaxis]
-            x_w_centered = (x_past_eff - np.sum(w_eff[:, np.newaxis] * x_past_eff, axis=0)) * w_sqrt
-            _, _, vt = np.linalg.svd(x_w_centered, full_matrices=False)
+            # Fisher causal projection: W_t = V_t[:, :q] from SVD of M_t = L_t^{-1} A_t
+            V_fisher = spec_rep.projection_v
             
             for q in self.macro_dims:
                 if q >= p_dim:
@@ -256,7 +267,10 @@ class LocalLinearGaussianDCE(BaseDynamicCE):
                     self.projections_[q].append(np.eye(p_dim, q))
                     continue
                     
-                phi_t = vt[:q, :].T  # (p, q)
+                if V_fisher is not None:
+                    phi_t = V_fisher[:, :q]  # (p, q) Fisher causal projection
+                else:
+                    phi_t = np.eye(p_dim, q)
                 self.projections_[q].append(phi_t)
                 
                 # Projected macro states
@@ -293,7 +307,7 @@ class LocalLinearGaussianDCE(BaseDynamicCE):
         self.q90_ = np.zeros(T_trans, dtype=np.int32)
         
         for t in range(T_trans):
-            tot_ei = self.micro_ei_[t]
+            tot_ei = float(np.sum(self.causal_spectrum_[t]))
             if tot_ei > 1e-12:
                 cum_ei = np.cumsum(self.causal_spectrum_[t])
                 idx = int(np.searchsorted(cum_ei, 0.90 * tot_ei))

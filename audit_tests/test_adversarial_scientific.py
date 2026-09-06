@@ -101,3 +101,75 @@ def test_eia930_total_interchange_uses_export_positive_sign_convention():
     )
     result = compute_balance_residuals(frame)
     assert result.loc[0, "accounting_residual"] == pytest.approx(0.0)
+
+
+def test_dgpe_finite_sample_recovery():
+    """DGP-E finite-sample DCD^PR and q90 recovery under spectral Marchenko-Pastur thresholding."""
+    from dce.datasets.synthetic import generate_dgp_e_changing_dimension
+    from dce.estimators.linear_gaussian import LocalLinearGaussianDCE
+    
+    data = generate_dgp_e_changing_dimension(n_steps=2400, seed=42)
+    est = LocalLinearGaussianDCE(bandwidth=36.0, macro_dims=[1, 2, 4, 8, 16], ridge_alpha=0.01)
+    est.fit(data.states)
+    
+    rmse = float(np.sqrt(np.mean((est.dcd_pr_ - data.true_dcd_pr) ** 2)))
+    bias = float(np.mean(est.dcd_pr_ - data.true_dcd_pr))
+    acc_q90 = float(np.mean(est.q90_ == data.true_q90))
+    
+    assert rmse < 1.0, f"RMSE(DCD^PR) must be < 1.0, got {rmse:.4f}"
+    assert abs(bias) < 0.35, f"|Bias(DCD^PR)| must be < 0.35, got {bias:.4f}"
+    assert acc_q90 >= 0.50, f"Accuracy(q90) must be >= 50%, got {acc_q90*100:.1f}%"
+
+
+def test_fisher_causal_projection_orthonormality_and_maximal_trace():
+    """Fisher causal projection W_t must be orthonormal and maximize Fisher causal trace."""
+    from dce.core.effective_info import compute_causal_spectrum
+    rng = np.random.RandomState(42)
+    p, q = 6, 2
+    A = rng.randn(p, p)
+    Sig_raw = rng.randn(p, p)
+    Sigma = Sig_raw @ Sig_raw.T + np.eye(p)
+    
+    report = compute_causal_spectrum(A, Sigma, regularization=0.0)
+    W = report.projection_v[:, :q]
+    
+    # 1. Orthonormality W^T W = I_q
+    np.testing.assert_allclose(W.T @ W, np.eye(q), atol=1e-12)
+    
+    # 2. Trace maximality: Tr(W^T A^T Sigma^{-1} A W) = sum_{i=1}^q lambda_i
+    F = A.T @ np.linalg.inv(Sigma) @ A
+    actual_trace = float(np.trace(W.T @ F @ W))
+    expected_trace = float(np.sum(report.eigenvalues[:q]))
+    assert actual_trace == pytest.approx(expected_trace, rel=1e-10)
+
+
+def test_causal_data_pipeline_no_lookahead_bfill():
+    """In causal rolling mode, missing values at t=0 must not be backfilled with future data."""
+    from dce.datasets.eia930.microstate import build_power_grid_microstate
+    timestamps = pd.date_range("2021-01-01", periods=10, freq="h")
+    # BA1 has missing values at t=0 and t=1
+    data = []
+    for t in timestamps:
+        data.append({"timestamp": t, "ba_code": "BA1", "demand": np.nan if t <= timestamps[1] else 100.0, "generation": 100.0, "wind": 10.0, "solar": 5.0, "interchange": 0.0, "interconnection": "ERCOT"})
+        data.append({"timestamp": t, "ba_code": "BA2", "demand": 50.0, "generation": 50.0, "wind": 5.0, "solar": 2.0, "interchange": 0.0, "interconnection": "ERCOT"})
+    df = pd.DataFrame(data)
+    
+    grid_data = build_power_grid_microstate(df, interconnection="ERCOT", scaling="causal_rolling")
+    # BA1 demand feature is column 0
+    assert grid_data.microstate_matrix[0, 0] == 0.0
+    assert grid_data.microstate_matrix[1, 0] == 0.0
+
+
+def test_h1_surrogate_mean_critical_value():
+    """Hypothesis1Result must compute and store the 5th percentile critical value of surrogate means."""
+    from dce.stats.hypothesis import compute_surrogate_significance_from_ensemble
+    rng = np.random.RandomState(42)
+    T, B = 500, 100
+    empirical = rng.randn(T) + 5.0
+    surrogates = rng.randn(B, T) + 7.0
+    
+    result = compute_surrogate_significance_from_ensemble(empirical, surrogates, test_direction="less")
+    assert result.critical_value_mean is not None
+    expected_crit = float(np.percentile(np.mean(surrogates, axis=1), 5.0))
+    assert result.critical_value_mean == pytest.approx(expected_crit, rel=1e-10)
+

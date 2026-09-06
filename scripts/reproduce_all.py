@@ -78,7 +78,10 @@ def ensure_synthetic_benchmarks(from_scratch: bool = False) -> bool:
     env["PYTHONPATH"] = str(ROOT_DIR / "src")
     res = subprocess.run([
         sys.executable,
-        str(ROOT_DIR / "src" / "dce" / "experiments" / "run_synthetic_mc.py")
+        str(ROOT_DIR / "src" / "dce" / "experiments" / "run_synthetic_mc.py"),
+        "--all-dgps",
+        "--reps", "100",
+        "--bandwidth", "36.0"
     ], env=env)
     return res.returncode == 0
 
@@ -143,6 +146,15 @@ def ensure_hypotheses_testing(from_scratch: bool = False) -> bool:
         _verify_scientific_assertions()
         return True
         
+    if from_scratch:
+        logger.info("Purging cached surrogate ensembles for clean --from-scratch reproduction...")
+        for cache_file in (ROOT_DIR / "results" / "empirical").glob(".cache_h1_*.npz"):
+            try:
+                cache_file.unlink()
+                logger.info(f"  Removed {cache_file.name}")
+            except Exception as e:
+                logger.warning(f"  Could not remove {cache_file.name}: {e}")
+                
     logger.info(f"Running hypothesis testing pipeline H1-H4 with B=1000 surrogates (missing: {[j.name for j in missing]})...")
     env = os.environ.copy()
     env["PYTHONPATH"] = str(ROOT_DIR / "src")
