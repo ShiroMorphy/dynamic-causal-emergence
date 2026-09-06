@@ -79,28 +79,36 @@ def execute_h1_test(output_dir: str = "results/empirical", n_surrogates: int = 1
         empirical_ccg = m_emp.optimal_dce_density_
         print(f"[{inter}] Empirical fit completed in {time.time() - t0:.2f}s: Mean DCD_PR = {np.mean(empirical_dcd):.4f}, Mean CCG = {np.mean(empirical_ccg):.4f}")
         
-        print(f"[{inter}] Generating {n_surrogates} strictly accepted multivariate IAAFT surrogates (T={X.shape[0]}, p={X.shape[1]})...")
-        t_gen = time.time()
-        surrogates = generate_multivariate_surrogates(X, n_surrogates=n_surrogates, seed=42, strictly_accepted=True)
-        print(f"[{inter}] Surrogate generation completed in {time.time() - t_gen:.2f}s")
-        
-        print(f"[{inter}] Refitting DCE model on {n_surrogates} surrogates in parallel across worker processes...")
-        from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
-        workers = min(n_surrogates, max(1, (os.cpu_count() or 4) - 1))
-        t_refit = time.time()
-        try:
-            chunk = max(1, n_surrogates // (workers * 4))
-            with ProcessPoolExecutor(max_workers=workers) as executor:
-                surr_results = list(executor.map(_fit_single_surrogate, surrogates, chunksize=chunk))
-        except Exception as e:
-            print(f"ProcessPoolExecutor fallback ({e}), using ThreadPoolExecutor...")
-            with ThreadPoolExecutor(max_workers=workers) as executor:
-                surr_results = list(executor.map(_fit_single_surrogate, surrogates))
-                
-        surr_dcd_ensemble = np.array([r[0] for r in surr_results], dtype=np.float64)
-        surr_ccg_ensemble = np.array([r[1] for r in surr_results], dtype=np.float64)
-        dt_total = time.time() - t_refit
-        print(f"[{inter}] All {n_surrogates} surrogate model refits completed in {dt_total:.2f}s ({n_surrogates / max(dt_total, 0.001):.2f} fits/sec)")
+        cache_path = os.path.join(output_dir, f".cache_h1_{inter.lower()}_{n_surrogates}.npz")
+        if os.path.exists(cache_path):
+            print(f"[{inter}] Loading cached surrogate ensembles from {cache_path}...")
+            cached = np.load(cache_path)
+            surr_dcd_ensemble = cached["dcd"]
+            surr_ccg_ensemble = cached["ccg"]
+        else:
+            print(f"[{inter}] Generating {n_surrogates} strictly accepted multivariate IAAFT surrogates (T={X.shape[0]}, p={X.shape[1]})...")
+            t_gen = time.time()
+            surrogates = generate_multivariate_surrogates(X, n_surrogates=n_surrogates, seed=42, strictly_accepted=True)
+            print(f"[{inter}] Surrogate generation completed in {time.time() - t_gen:.2f}s")
+            
+            print(f"[{inter}] Refitting DCE model on {n_surrogates} surrogates in parallel across worker processes...")
+            from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+            workers = min(n_surrogates, max(1, (os.cpu_count() or 4) - 1))
+            t_refit = time.time()
+            try:
+                chunk = max(1, n_surrogates // (workers * 4))
+                with ProcessPoolExecutor(max_workers=workers) as executor:
+                    surr_results = list(executor.map(_fit_single_surrogate, surrogates, chunksize=chunk))
+            except Exception as e:
+                print(f"ProcessPoolExecutor fallback ({e}), using ThreadPoolExecutor...")
+                with ThreadPoolExecutor(max_workers=workers) as executor:
+                    surr_results = list(executor.map(_fit_single_surrogate, surrogates))
+                    
+            surr_dcd_ensemble = np.array([r[0] for r in surr_results], dtype=np.float64)
+            surr_ccg_ensemble = np.array([r[1] for r in surr_results], dtype=np.float64)
+            dt_total = time.time() - t_refit
+            print(f"[{inter}] All {n_surrogates} surrogate model refits completed in {dt_total:.2f}s ({n_surrogates / max(dt_total, 0.001):.2f} fits/sec)")
+            np.savez_compressed(cache_path, dcd=surr_dcd_ensemble, ccg=surr_ccg_ensemble)
         
         # Primary: DCD_PR (contraction - less)
         h1_res_dcd = compute_surrogate_significance_from_ensemble(
@@ -149,8 +157,10 @@ def execute_h1_test(output_dir: str = "results/empirical", n_surrogates: int = 1
                 "critical_envelope_sample": (h1_res_ccg.critical_envelope[:100].tolist() if h1_res_ccg.critical_envelope is not None else []),
                 "surrogate_95th_sample": h1_res_ccg.surrogate_dce_95th[:100].tolist()
             }
-        }
         print(f"[{inter}] DCD_PR Mean={h1_res_dcd.mean_stat_empirical:.3f} (p={h1_res_dcd.mean_stat_pvalue:.4f}, extreme p={h1_res_dcd.extreme_stat_pvalue:.4f}) | CCG Mean={h1_res_ccg.mean_stat_empirical:.3f} (p={h1_res_ccg.mean_stat_pvalue:.4f})")
+        # Save individual grid checkpoint
+        with open(os.path.join(output_dir, f"h1_{inter.lower()}_results.json"), "w") as f_chk:
+            json.dump(inter_results[inter.lower()], f_chk, indent=2)
     
     # Root dictionary: backward compatible with ERCOT while preserving all interconnections
     ercot_res = inter_results["ercot"]
@@ -158,7 +168,7 @@ def execute_h1_test(output_dir: str = "results/empirical", n_surrogates: int = 1
         "hypothesis": "H1_Surrogate_Significance",
         "interconnection": "ERCOT",
         "n_surrogates": n_surrogates,
-        "T": T_slice,
+        "T": ercot_res["T"],
         "interconnections": inter_results,
         "ercot": inter_results["ercot"],
         "western": inter_results["western"],
