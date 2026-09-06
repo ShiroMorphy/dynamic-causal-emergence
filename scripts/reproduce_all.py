@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
 """
-Master Replication Script for Dynamic Causal Emergence (DCE).
+Master Replication Script for Dynamic Causal Dimensionality (DCD).
 
 Executes end-to-end pipeline verification and reproduces:
-1. Raw data integrity verification against SHA-256 manifests.
+1. Raw data integrity verification against SHA-256 Zenodo manifest.
 2. Synthetic benchmarks validation (DGPs A-I).
 3. Empirical grid estimates and statistical hypotheses testing (H1-H4).
-4. Multiscale Causal Emergence 2.0 apportioning.
-5. All publication figures (Figures 1-7 in paper/figures/).
-6. Clean LaTeX manuscript compilation (paper/main.pdf).
+4. All publication figures (Figures 1-6 in paper/figures/).
+5. Clean LaTeX manuscript compilation (paper/main.pdf and paper_dce_submitted.pdf).
 
 Usage:
-    python scripts/reproduce_all.py [--figures-only] [--compile-latex]
+    python scripts/reproduce_all.py [--from-scratch] [--figures-only] [--compile-latex]
 """
 
 import argparse
@@ -67,28 +66,65 @@ def verify_raw_data_manifest() -> bool:
     return all_ok
 
 
-def verify_empirical_results() -> bool:
-    expected_files = [
+def ensure_synthetic_benchmarks(from_scratch: bool = False) -> bool:
+    target = ROOT_DIR / "results" / "synthetic" / "mc_benchmark_consolidated_linear_gaussian.json"
+    if target.exists() and not from_scratch:
+        logger.info(f"Synthetic benchmark artifact verified: {target.relative_to(ROOT_DIR)}")
+        return True
+        
+    logger.info("Running synthetic Monte Carlo benchmarks (DGPs A-I)...")
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(ROOT_DIR / "src")
+    res = subprocess.run([
+        sys.executable,
+        str(ROOT_DIR / "src" / "dce" / "experiments" / "run_synthetic_mc.py")
+    ], env=env)
+    return res.returncode == 0
+
+
+def ensure_grid_estimates(from_scratch: bool = False) -> bool:
+    expected_parquets = [
         ROOT_DIR / "results" / "empirical" / "ercot_dce_2021_retrospective.parquet",
         ROOT_DIR / "results" / "empirical" / "ercot_dce_2021_causal.parquet",
         ROOT_DIR / "results" / "empirical" / "western_dce_2021_retrospective.parquet",
-        ROOT_DIR / "results" / "empirical" / "eastern_dce_2021_retrospective.parquet",
+        ROOT_DIR / "results" / "empirical" / "eastern_dce_2021_retrospective.parquet"
+    ]
+    missing = [p for p in expected_parquets if not p.exists()]
+    if not missing and not from_scratch:
+        logger.info("Empirical grid trajectory parquets verified.")
+        return True
+        
+    logger.info(f"Generating empirical grid trajectories (missing: {[p.name for p in missing]})...")
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(ROOT_DIR / "src")
+    res = subprocess.run([
+        sys.executable,
+        str(ROOT_DIR / "src" / "dce" / "experiments" / "run_grid_estimation.py")
+    ], env=env)
+    return res.returncode == 0
+
+
+def ensure_hypotheses_testing(from_scratch: bool = False) -> bool:
+    expected_json = [
         ROOT_DIR / "results" / "empirical" / "h1_surrogate_results.json",
         ROOT_DIR / "results" / "empirical" / "h2_gamm_results.json",
         ROOT_DIR / "results" / "empirical" / "h3_event_study_results.json",
-        ROOT_DIR / "results" / "empirical" / "h4_forecast_results.json",
-        ROOT_DIR / "results" / "empirical" / "ercot_dce_2022h2_retrospective.parquet",
-        ROOT_DIR / "results" / "empirical" / "western_dce_2022h2_retrospective.parquet",
-        ROOT_DIR / "results" / "empirical" / "eastern_dce_2022h2_retrospective.parquet"
+        ROOT_DIR / "results" / "empirical" / "h4_forecast_results.json"
     ]
-    all_present = True
-    for ef in expected_files:
-        if not ef.exists():
-            logger.error(f"Missing empirical artifact: {ef}")
-            all_present = False
-        else:
-            logger.info(f"  [FOUND] {ef.relative_to(ROOT_DIR)} ({ef.stat().st_size:,} bytes)")
-    return all_present
+    missing = [j for j in expected_json if not j.exists()]
+    if not missing and not from_scratch:
+        logger.info("Empirical hypothesis testing JSON artifacts verified.")
+        return True
+        
+    logger.info(f"Running hypothesis testing pipeline H1-H4 (missing: {[j.name for j in missing]})...")
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(ROOT_DIR / "src")
+    res = subprocess.run([
+        sys.executable,
+        str(ROOT_DIR / "src" / "dce" / "experiments" / "run_hypotheses_testing.py"),
+        "--test", "all"
+    ], env=env)
+    return res.returncode == 0
 
 
 def generate_figures() -> bool:
@@ -98,7 +134,7 @@ def generate_figures() -> bool:
     env["PYTHONPATH"] = str(ROOT_DIR / "src")
     res = subprocess.run([sys.executable, str(script_path)], capture_output=True, text=True, env=env)
     if res.returncode == 0:
-        logger.info("All 7 figures generated successfully in paper/figures/")
+        logger.info("All publication figures (Figures 1-6) generated successfully in paper/figures/")
         return True
     else:
         logger.error(f"Figure generation failed:\n{res.stderr}")
@@ -159,44 +195,57 @@ def display_claim_ledger():
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Master Reproduction Runner for DCE")
+    parser = argparse.ArgumentParser(description="Master Reproduction Runner for DCD")
+    parser.add_argument("--from-scratch", action="store_true", help="Force full regeneration of all synthetic benchmarks, grid estimates, and H1-H4")
     parser.add_argument("--figures-only", action="store_true", help="Only regenerate figures")
     parser.add_argument("--compile-latex", action="store_true", default=True, help="Compile LaTeX manuscript")
     args = parser.parse_args()
 
-    logger.info("Starting Dynamic Causal Emergence (DCE) Master Replication...")
+    logger.info("Starting Dynamic Causal Dimensionality (DCD) Master Replication...")
 
-    # Step 1: Raw data
+    # Step 1: Raw data integrity
     data_ok = verify_raw_data_manifest()
     if not data_ok:
         logger.error("Raw data verification failed. Cannot guarantee cryptographic reproducibility.")
     else:
         logger.info("Raw data verification PASSED (Zenodo CC-BY-4.0).")
 
-    # Step 2: Empirical artifacts
-    artifacts_ok = verify_empirical_results()
-    if not artifacts_ok:
-        logger.error("Empirical artifacts verification FAILED.")
-    else:
-        logger.info("Empirical artifacts verification PASSED.")
+    if not args.figures_only:
+        # Step 2: Synthetic benchmarks
+        synth_ok = ensure_synthetic_benchmarks(from_scratch=args.from_scratch)
+        if not synth_ok:
+            logger.error("Synthetic benchmarks failed.")
+            sys.exit(1)
 
-    # Step 3: Figures
+        # Step 3: Empirical grid estimates
+        grid_ok = ensure_grid_estimates(from_scratch=args.from_scratch)
+        if not grid_ok:
+            logger.error("Grid estimation failed.")
+            sys.exit(1)
+
+        # Step 4: Empirical hypothesis tests (H1-H4)
+        hyp_ok = ensure_hypotheses_testing(from_scratch=args.from_scratch)
+        if not hyp_ok:
+            logger.error("Hypothesis testing failed.")
+            sys.exit(1)
+
+    # Step 5: Figures
     fig_ok = generate_figures()
     if not fig_ok:
         logger.error("Figure generation FAILED.")
         sys.exit(1)
 
-    # Step 4: LaTeX Compilation
+    # Step 6: LaTeX Compilation
     if args.compile_latex:
         latex_ok = compile_manuscript()
         if not latex_ok:
             logger.error("LaTeX compilation FAILED.")
             sys.exit(1)
 
-    # Step 5: Claim ledger
+    # Step 7: Claim ledger
     display_claim_ledger()
 
-    logger.info("Dynamic Causal Emergence pipeline replication COMPLETE and VERIFIED.")
+    logger.info("Dynamic Causal Dimensionality pipeline replication COMPLETE and VERIFIED.")
 
 
 if __name__ == "__main__":

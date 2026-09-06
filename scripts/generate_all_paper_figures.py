@@ -176,7 +176,7 @@ def generate_figure_4_vre_response(output_path: str = "paper/figures/fig4_vre_no
                 color=COLORS["primary_blue"], alpha=0.15, s=6, label="Hourly Obs")
     ax1.plot(vre_grid, p_dep, color=COLORS["accent_orange"], lw=2.0, label=r"GAM Spline $s(\text{VRE})$")
     ax1.fill_between(vre_grid, confi[:, 0], confi[:, 1], color=COLORS["accent_orange"], alpha=0.25, label="95% CI")
-    ax1.axvline(gamma, color="firebrick", ls="--", lw=1.4, label=f"Threshold $\hat{{\gamma}}={gamma:.1f}\\%$")
+    ax1.axvline(gamma, color="firebrick", ls="--", lw=1.4, label=f"Threshold $\hat{{\gamma}}={gamma:.1f}\\%$ (Sup-Wald $p=0.585$)")
     ax1.set_title("a | Nonlinear Causal Response to VRE (ERCOT)", fontweight="bold", loc="left")
     ax1.set_xlabel("Renewable Penetration VRE (%)")
     ax1.set_ylabel(r"Partial Effect on $DCD_t^{\text{PR}}$")
@@ -189,7 +189,7 @@ def generate_figure_4_vre_response(output_path: str = "paper/figures/fig4_vre_no
     ax2.axhline(0, color="grey", ls=":", lw=1.0)
     ax2.axvspan(ci_gamma[0], ci_gamma[1], color="firebrick", alpha=0.15, label=f"95% CI [{ci_gamma[0]:.1f}%, {ci_gamma[1]:.1f}%]")
     ax2.axvline(gamma, color="firebrick", ls="--", lw=1.4)
-    ax2.set_title("b | Marginal Sensitivity & Structural Break", fontweight="bold", loc="left")
+    ax2.set_title("b | Marginal Sensitivity & Hansen Sup-Wald Search", fontweight="bold", loc="left")
     ax2.set_xlabel("Renewable Penetration VRE (%)")
     ax2.set_ylabel("Marginal Derivative")
     ax2.legend(loc="upper right", frameon=True, fontsize=6.5)
@@ -232,9 +232,9 @@ def generate_figure_5_uri(output_path: str = "paper/figures/fig5_extreme_events_
     
     # Panel B: Dynamic Causal Participation Ratio DCD_PR
     dcd_event = uri_slice["dcd_pr"].values
-    ax2.plot(ts, dcd_event, color=COLORS["accent_purple"], lw=1.4, label=r"Event Participation Ratio $DCD_t^{\text{PR}}$")
-    ax2.axhline(np.percentile(df_ercot["dcd_pr"], 10.0), color="firebrick", ls="--", lw=1.0, label="10th Percentile Baseline Normal")
-    ax2.set_title(r"b | Causal Degrees of Freedom ($DCD_t^{\text{PR}}$) Dynamics", fontweight="bold", loc="left")
+    ax2.plot(ts, dcd_event, color=COLORS["accent_purple"], lw=1.4, label=r"Event $DCD_t^{\text{PR}}$ ($\Delta=+0.328$, $p=0.253$, non-collapse)")
+    ax2.axhline(np.percentile(df_ercot["dcd_pr"], 10.0), color="firebrick", ls="--", lw=1.0, label="10th Percentile Baseline ($4.87$)")
+    ax2.set_title(r"b | Causal Participation Ratio $DCD_t^{\text{PR}}$ (Degrees of Freedom Maintained)", fontweight="bold", loc="left")
     ax2.set_ylabel(r"Participation Ratio $DCD_t^{\text{PR}}$")
     ax2.set_xlabel("UTC Date (Feb 2021)")
     ax2.legend(loc="upper right", frameon=True, fontsize=6.5)
@@ -257,6 +257,7 @@ def generate_figure_6_forecasting(output_path: str = "paper/figures/fig6_baselin
     rmse_aug = [h4["rmse_augmented"][str(h)] for h in horizons]
     dm_stats = [h4["diebold_mariano_stat"][str(h)] for h in horizons]
     dm_pvals = [h4["diebold_mariano_pvalue"][str(h)] for h in horizons]
+    dm_qvals = [h4.get("diebold_mariano_qvalue", {}).get(str(h), dm_pvals[i]) for i, h in enumerate(horizons)]
     
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(7.2, 3.2), gridspec_kw={"wspace": 0.28})
     
@@ -272,15 +273,26 @@ def generate_figure_6_forecasting(output_path: str = "paper/figures/fig6_baselin
     ax1.grid(axis="y")
     
     # Panel B: Diebold-Mariano test statistics
-    colors = [COLORS["accent_orange"] if p < 0.05 else COLORS["neutral_grey"] for p in dm_pvals]
-    ax2.bar(x, dm_stats, width=0.5, color=colors)
-    ax2.axhline(1.96, color="red", ls="--", lw=0.9, label=r"Critical $\pm 1.96$ ($p=0.05$)")
+    # Note: h=12 has unadjusted p=0.035, but FDR q=0.128 (not significant)
+    colors = [COLORS["accent_orange"] if q < 0.05 else COLORS["neutral_grey"] for q in dm_qvals]
+    bars = ax2.bar(x, dm_stats, width=0.5, color=colors)
+    ax2.axhline(1.96, color="red", ls="--", lw=0.9, label=r"Critical $\pm 1.96$ ($\alpha=0.05$)")
     ax2.axhline(-1.96, color="red", ls="--", lw=0.9)
     ax2.axhline(0, color="grey", lw=0.8)
-    ax2.set_title("b | Diebold-Mariano HAC Test Statistic", fontweight="bold", loc="left")
+    
+    # Annotate with p and q values
+    for idx, (b, p, q) in enumerate(zip(bars, dm_pvals, dm_qvals)):
+        y_val = b.get_height()
+        va = "bottom" if y_val >= 0 else "top"
+        offset = 0.15 if y_val >= 0 else -0.25
+        annot = f"p={p:.3f}\nq={q:.3f}" if idx == 2 else f"p={p:.2f}"
+        ax2.text(b.get_x() + b.get_width()/2, y_val + offset, annot, ha="center", va=va, fontsize=5.8, color="#333333")
+        
+    ax2.set_title("b | Diebold-Mariano HAC Test (BH FDR)", fontweight="bold", loc="left")
     ax2.set_xticks(x)
     ax2.set_xticklabels([f"h={h}h" for h in horizons])
     ax2.set_ylabel("DM Statistic")
+    ax2.set_ylim(-2.8, 2.2)
     ax2.legend(loc="lower right", frameon=True, fontsize=6.8)
     ax2.grid(axis="y")
     

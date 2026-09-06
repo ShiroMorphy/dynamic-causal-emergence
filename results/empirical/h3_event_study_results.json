@@ -12415,5 +12415,9 @@
       "tx_heatwave_2022",
       "elliott_2022"
     ]
-  }
+  },
+  "dcd_pr_collapse_detected": false,
+  "dcd_pr_interpretation": "DCD_PR did not exhibit dimensional collapse during Winter Storm Uri (delta = +0.328, p = 0.253); effective degrees of freedom were maintained.",
+  "ccg_surge_detected": true,
+  "ccg_interpretation": "Causal Concentration Gain exhibited an acute event-specific surge from 0.086 to 0.244 (p_surge = 0.0250). Multi-event panel (p = 0.0919) indicates crisis-specific rather than universal cross-event effect."
 }
