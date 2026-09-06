@@ -51,12 +51,13 @@ def execute_h1_test(output_dir: str = "results/empirical", n_surrogates: int = 1
     df_raw = load_real_eia930_archive("2021")
     interconnections = ["ERCOT", "Western", "Eastern"]
     inter_results = {}
-    T_slice = 2000
     
     for inter in interconnections:
-        print(f"\n>>> Running H1 for {inter} Interconnection (T={T_slice}, B={n_surrogates} surrogates) <<<")
-        m_data = build_power_grid_microstate(df_raw, interconnection=inter, spec="fuel_extended", scaling="standard")
-        X = m_data.microstate_matrix[:T_slice]
+        spec = "fuel_extended" if inter == "ERCOT" else "core5"
+        m_data = build_power_grid_microstate(df_raw, interconnection=inter, spec=spec, scaling="standard")
+        X = m_data.microstate_matrix  # Full annual series (T=8760)
+        T_len = len(X)
+        print(f"\n>>> Running H1 for {inter} Interconnection (spec={spec}, T={T_len}, p={X.shape[1]}, B={n_surrogates} surrogates) <<<")
         
         t0 = time.time()
         m_emp = LocalLinearGaussianDCE(
@@ -108,9 +109,12 @@ def execute_h1_test(output_dir: str = "results/empirical", n_surrogates: int = 1
         
         inter_results[inter.lower()] = {
             "interconnection": inter,
-            "T": T_slice,
+            "spec": spec,
+            "T": T_len,
             "p": X.shape[1],
+            "n_surrogates": n_surrogates,
             "dcd_pr": {
+                "n_surrogates": n_surrogates,
                 "mean_stat_empirical": h1_res_dcd.mean_stat_empirical,
                 "mean_stat_pvalue": h1_res_dcd.mean_stat_pvalue,
                 "extreme_stat_empirical": h1_res_dcd.extreme_stat_empirical,
@@ -124,6 +128,7 @@ def execute_h1_test(output_dir: str = "results/empirical", n_surrogates: int = 1
                 "surrogate_95th_sample": h1_res_dcd.surrogate_dce_95th[:100].tolist()
             },
             "ccg": {
+                "n_surrogates": n_surrogates,
                 "mean_stat_empirical": h1_res_ccg.mean_stat_empirical,
                 "mean_stat_pvalue": h1_res_ccg.mean_stat_pvalue,
                 "extreme_stat_empirical": h1_res_ccg.extreme_stat_empirical,
@@ -577,7 +582,7 @@ def main():
     import argparse
     parser = argparse.ArgumentParser(description="Empirical Hypothesis Testing Pipeline (H1 to H4).")
     parser.add_argument("--test", default="all", choices=["all", "h1", "h2", "h3", "h4"], help="Which hypothesis test to execute")
-    parser.add_argument("--n-surrogates", type=int, default=200, help="Number of surrogate refits for H1")
+    parser.add_argument("--n-surrogates", type=int, default=1000, help="Number of surrogate refits for H1")
     parser.add_argument("--output-dir", default="results/empirical", help="Directory for output JSON artifacts")
     args = parser.parse_args()
     

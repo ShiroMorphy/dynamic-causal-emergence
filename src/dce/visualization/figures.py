@@ -56,25 +56,25 @@ def generate_figure_1_conceptual_framework(
     ax1.text(8.25, 9.0, r"Macro $V_t$", fontweight="bold", color=COLORS["primary_dark"], ha="center", fontsize=8.5)
     ax1.set_title("a | Dynamic Coarse-Graining Mapping", fontweight="bold", loc="left", fontsize=9)
     
-    # Right: Continuous Effective Information & Temporal Manifold
+    # Right: Dynamic Causal Dimensionality & Causal Concentration
     ax2.set_xlim(0, 10)
     ax2.set_ylim(0, 10)
     ax2.axis("off")
     
     t_vals = np.linspace(1, 9, 100)
-    dce_curve = 5.0 + 2.5 * np.sin(t_vals * 0.8) + 0.8 * np.cos(t_vals * 1.5)
-    ax2.plot(t_vals, dce_curve, color=COLORS["primary_blue"], lw=2.0, label=r"$DCE_t = EI_t(V) - EI_t(X)$")
-    ax2.fill_between(t_vals, 2.0, dce_curve, color=COLORS["primary_blue"], alpha=0.15)
+    dcd_curve = 7.5 - 4.5 / (1.0 + np.exp(-(t_vals - 5.0) * 1.8))
+    ccg_curve = 1.5 + 2.0 / (1.0 + np.exp(-(t_vals - 5.0) * 1.8))
+    ax2.plot(t_vals, dcd_curve, color=COLORS["accent_purple"], lw=2.0, label=r"Causal Dimensionality $DCD_t^{\text{PR}}$")
+    ax2.plot(t_vals, ccg_curve, color=COLORS["primary_blue"], lw=2.0, label=r"Causal Concentration Gain $CCG_t$")
+    ax2.axhline(8.0, color=COLORS["neutral_grey"], ls="--", lw=1.2, label=r"Micro Dimension $p=8$")
+    ax2.axvline(5.0, color=COLORS["accent_orange"], ls=":", lw=1.5, label=r"Macroscopic Transition ($\tau$)")
     
-    ax2.axhline(2.0, color=COLORS["neutral_grey"], ls="--", lw=1.2, label="Micro $EI_t(X)$ Baseline")
-    ax2.axvline(5.2, color=COLORS["accent_orange"], ls=":", lw=1.5, label=r"Regime Switch ($\tau$)")
-    
-    ax2.annotate("Causal Emergence\n" + r"$DCE_t > 0$", xy=(3.5, 6.0), xytext=(2.0, 7.8),
-                 arrowprops=dict(arrowstyle="->", color=COLORS["primary_dark"], lw=1.2),
-                 fontweight="bold", fontsize=7.5, color=COLORS["primary_dark"])
+    ax2.annotate("Dimensional Contraction\n" + r"$DCD_t^{\text{PR}} \ll p$", xy=(6.5, 3.2), xytext=(5.5, 1.2),
+                 arrowprops=dict(arrowstyle="->", color=COLORS["accent_purple"], lw=1.2),
+                 fontweight="bold", fontsize=7.5, color=COLORS["accent_purple"])
                  
-    ax2.set_title("b | Dynamic Causal Emergence ($DCE_t$)", fontweight="bold", loc="left", fontsize=9)
-    ax2.legend(loc="lower center", frameon=True, fontsize=6.5)
+    ax2.set_title(r"b | Dynamic Causal Dimensionality & Concentration", fontweight="bold", loc="left", fontsize=9)
+    ax2.legend(loc="upper right", frameon=True, fontsize=6.5)
     
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     plt.savefig(output_path, dpi=300)

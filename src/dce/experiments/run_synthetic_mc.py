@@ -108,6 +108,32 @@ def run_mc_replication(
     dim_accuracy_raw = float(np.mean(q_hat_raw == q_true))
     dim_accuracy_density = float(np.mean(q_hat_density == q_true))
     
+    # 2b. Dynamic Causal Dimensionality Metrics
+    dcd_pr_hat = getattr(model, "dcd_pr_", None)
+    dcd_entropy_hat = getattr(model, "dcd_entropy_", None)
+    q90_hat = getattr(model, "q90_", None)
+
+    if dcd_pr_hat is not None and getattr(data, "true_dcd_pr", None) is not None:
+        err_dcd_pr = dcd_pr_hat[:T_eval] - data.true_dcd_pr[:T_eval]
+        rmse_dcd_pr = float(np.sqrt(np.mean(err_dcd_pr ** 2)))
+        mean_bias_dcd_pr = float(np.mean(err_dcd_pr))
+    else:
+        rmse_dcd_pr = None
+        mean_bias_dcd_pr = None
+
+    if dcd_entropy_hat is not None and getattr(data, "true_dcd_entropy", None) is not None:
+        err_dcd_entropy = dcd_entropy_hat[:T_eval] - data.true_dcd_entropy[:T_eval]
+        rmse_dcd_entropy = float(np.sqrt(np.mean(err_dcd_entropy ** 2)))
+        mean_bias_dcd_entropy = float(np.mean(err_dcd_entropy))
+    else:
+        rmse_dcd_entropy = None
+        mean_bias_dcd_entropy = None
+
+    if q90_hat is not None and getattr(data, "true_q90", None) is not None:
+        dim_accuracy_q90 = float(np.mean(q90_hat[:T_eval] == data.true_q90[:T_eval]))
+    else:
+        dim_accuracy_q90 = None
+    
     # 3. Detection Delay & Detection Success (for transition DGPs)
     detection_delay_density = None
     detection_success_density = None
@@ -149,6 +175,11 @@ def run_mc_replication(
         "max_dce_density": max_dce_density,
         "dim_accuracy_raw": dim_accuracy_raw,
         "dim_accuracy_density": dim_accuracy_density,
+        "rmse_dcd_pr": rmse_dcd_pr,
+        "mean_bias_dcd_pr": mean_bias_dcd_pr,
+        "rmse_dcd_entropy": rmse_dcd_entropy,
+        "mean_bias_dcd_entropy": mean_bias_dcd_entropy,
+        "dim_accuracy_q90": dim_accuracy_q90,
         "detection_delay_density": detection_delay_density,
         "detection_success_density": detection_success_density,
         "is_false_alarm_raw": is_false_alarm_raw,
@@ -220,8 +251,13 @@ def run_monte_carlo_suite(
     ci_raw_low, ci_raw_high = clopper_pearson_ci(k_raw, n_reps)
     ci_dens_low, ci_dens_high = clopper_pearson_ci(k_dens, n_reps)
     
+    dcd_pr_rmses = [r["rmse_dcd_pr"] for r in reps_data if r["rmse_dcd_pr"] is not None]
+    dcd_pr_biases = [r["mean_bias_dcd_pr"] for r in reps_data if r["mean_bias_dcd_pr"] is not None]
+    dcd_ent_rmses = [r["rmse_dcd_entropy"] for r in reps_data if r["rmse_dcd_entropy"] is not None]
+    dcd_ent_biases = [r["mean_bias_dcd_entropy"] for r in reps_data if r["mean_bias_dcd_entropy"] is not None]
+    q90_accs = [r["dim_accuracy_q90"] for r in reps_data if r["dim_accuracy_q90"] is not None]
     delays = [r["detection_delay_density"] for r in reps_data if r["detection_delay_density"] is not None]
-    
+
     summary = {
         "dgp": dgp_name,
         "n_reps": n_reps,
@@ -233,6 +269,13 @@ def run_monte_carlo_suite(
         "fpr_raw_ci95": [ci_raw_low, ci_raw_high],
         "fpr_density": float(k_dens / n_reps),
         "fpr_density_ci95": [ci_dens_low, ci_dens_high],
+        "mean_rmse_dcd_pr": float(np.mean(dcd_pr_rmses)) if dcd_pr_rmses else None,
+        "std_rmse_dcd_pr": float(np.std(dcd_pr_rmses)) if dcd_pr_rmses else None,
+        "mean_bias_dcd_pr": float(np.mean(dcd_pr_biases)) if dcd_pr_biases else None,
+        "mean_rmse_dcd_entropy": float(np.mean(dcd_ent_rmses)) if dcd_ent_rmses else None,
+        "std_rmse_dcd_entropy": float(np.std(dcd_ent_rmses)) if dcd_ent_rmses else None,
+        "mean_bias_dcd_entropy": float(np.mean(dcd_ent_biases)) if dcd_ent_biases else None,
+        "mean_dim_accuracy_q90": float(np.mean(q90_accs)) if q90_accs else None,
         "mean_rmse_density": float(np.mean([r["rmse_density"] for r in reps_data])),
         "std_rmse_density": float(np.std([r["rmse_density"] for r in reps_data])),
         "mean_bias_density": float(np.mean([r["mean_bias_density"] for r in reps_data])),

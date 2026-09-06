@@ -16,7 +16,7 @@ Canonical Data Generating Processes (DGPs) according to Q1 protocol:
 from typing import Any, Dict, List, NamedTuple, Optional, Tuple, Union
 import numpy as np
 
-from dce.core.effective_info import compute_gaussian_effective_information
+from dce.core.effective_info import compute_gaussian_effective_information, compute_causal_spectrum
 
 
 class SyntheticBenchmarkData(NamedTuple):
@@ -29,6 +29,24 @@ class SyntheticBenchmarkData(NamedTuple):
     extra_info: Optional[Dict[str, Any]] = None
     true_dce_raw: Optional[np.ndarray] = None       # (T-1,) Exact raw DCE: EI(V) - EI(X) <= 0
     true_dce_density: Optional[np.ndarray] = None   # (T-1,) Exact density DCE: EI(V)/q - EI(X)/p
+    true_dcd_pr: Optional[np.ndarray] = None        # (T-1,) Exact analytical Participation Ratio
+    true_dcd_entropy: Optional[np.ndarray] = None   # (T-1,) Exact analytical Causal Effective Rank
+    true_q90: Optional[np.ndarray] = None           # (T-1,) Exact analytical 90% causal dimension
+
+
+def compute_linear_gaussian_dcd_ground_truth(
+    A: np.ndarray,
+    Sigma: np.ndarray
+) -> Tuple[float, float, int]:
+    """
+    Computes exact analytical Dynamic Causal Dimensionality:
+    (dcd_pr, dcd_entropy, q90) from the continuous Causal Information Spectrum:
+    e_i = 1/2 * ln(1 + lambda_i) where lambda_i are eigenvalues of Sigma^{-1} A A^T.
+    """
+    rep = compute_causal_spectrum(A, Sigma)
+    cum_e = np.cumsum(rep.spectrum) / max(rep.effective_information, 1e-12)
+    q90 = int(np.searchsorted(cum_e, 0.90) + 1)
+    return float(rep.dcd_pr), float(rep.dcd_entropy), int(q90)
 
 
 def compute_linear_gaussian_dce_ground_truth(
@@ -91,6 +109,9 @@ def generate_dgp_a_null_stationary(
     true_dce_raw = np.zeros(n_steps - 1, dtype=np.float64)
     true_dce_density = np.zeros(n_steps - 1, dtype=np.float64)
     true_optimal_dim = np.full(n_steps - 1, p_dim, dtype=np.int32)
+    true_dcd_pr = np.full(n_steps - 1, float(p_dim), dtype=np.float64)
+    true_dcd_entropy = np.full(n_steps - 1, float(p_dim), dtype=np.float64)
+    true_q90 = np.full(n_steps - 1, int(np.ceil(0.9 * p_dim)), dtype=np.int32)
     
     return SyntheticBenchmarkData(
         states=states,
@@ -100,7 +121,10 @@ def generate_dgp_a_null_stationary(
         dgp_name="DGP-A_null_stationary",
         extra_info={"A": A, "noise_level": noise_level},
         true_dce_raw=true_dce_raw,
-        true_dce_density=true_dce_density
+        true_dce_density=true_dce_density,
+        true_dcd_pr=true_dcd_pr,
+        true_dcd_entropy=true_dcd_entropy,
+        true_q90=true_q90
     )
 
 
@@ -134,6 +158,9 @@ def generate_dgp_b_null_nonstationary(
     true_dce_raw = np.zeros(n_steps - 1, dtype=np.float64)
     true_dce_density = np.zeros(n_steps - 1, dtype=np.float64)
     true_optimal_dim = np.full(n_steps - 1, p_dim, dtype=np.int32)
+    true_dcd_pr = np.full(n_steps - 1, float(p_dim), dtype=np.float64)
+    true_dcd_entropy = np.full(n_steps - 1, float(p_dim), dtype=np.float64)
+    true_q90 = np.full(n_steps - 1, int(np.ceil(0.9 * p_dim)), dtype=np.int32)
     
     return SyntheticBenchmarkData(
         states=states,
@@ -143,7 +170,10 @@ def generate_dgp_b_null_nonstationary(
         dgp_name="DGP-B_null_nonstationary",
         extra_info={"rho_t": rho_t, "sigma_t": sigma_t},
         true_dce_raw=true_dce_raw,
-        true_dce_density=true_dce_density
+        true_dce_density=true_dce_density,
+        true_dcd_pr=true_dcd_pr,
+        true_dcd_entropy=true_dcd_entropy,
+        true_q90=true_q90
     )
 
 
@@ -191,10 +221,16 @@ def generate_dgp_c_abrupt_emergence(
     _, _, dce_raw_b, dce_density_b = compute_linear_gaussian_dce_ground_truth(
         A_regime_b, Sigma_b, q_dim
     )
+    dcd_pr_b, dcd_ent_b, q90_b = compute_linear_gaussian_dcd_ground_truth(
+        A_regime_b, Sigma_b
+    )
     
     true_dce_raw = np.zeros(n_steps - 1, dtype=np.float64)
     true_dce_density = np.zeros(n_steps - 1, dtype=np.float64)
     true_optimal_dim = np.full(n_steps - 1, p_dim, dtype=np.int32)
+    true_dcd_pr = np.zeros(n_steps - 1, dtype=np.float64)
+    true_dcd_entropy = np.zeros(n_steps - 1, dtype=np.float64)
+    true_q90 = np.zeros(n_steps - 1, dtype=np.int32)
     
     for t in range(n_steps - 1):
         if t < transition_t:
@@ -202,6 +238,9 @@ def generate_dgp_c_abrupt_emergence(
             true_dce_raw[t] = 0.0
             true_dce_density[t] = 0.0
             true_optimal_dim[t] = p_dim
+            true_dcd_pr[t] = float(p_dim)
+            true_dcd_entropy[t] = float(p_dim)
+            true_q90[t] = p_dim
         else:
             micro_noise = rng.randn(p_dim) * sigma_micro
             for c in range(q_dim):
@@ -217,6 +256,9 @@ def generate_dgp_c_abrupt_emergence(
             true_dce_raw[t] = dce_raw_b
             true_dce_density[t] = dce_density_b
             true_optimal_dim[t] = q_dim
+            true_dcd_pr[t] = dcd_pr_b
+            true_dcd_entropy[t] = dcd_ent_b
+            true_q90[t] = q90_b
             
     return SyntheticBenchmarkData(
         states=states,
@@ -225,7 +267,10 @@ def generate_dgp_c_abrupt_emergence(
         transition_timestamp=transition_t,
         dgp_name="DGP-C_abrupt_emergence",
         true_dce_raw=true_dce_raw,
-        true_dce_density=true_dce_density
+        true_dce_density=true_dce_density,
+        true_dcd_pr=true_dcd_pr,
+        true_dcd_entropy=true_dcd_entropy,
+        true_q90=true_q90
     )
 
 
@@ -269,6 +314,9 @@ def generate_dgp_d_smooth_drift(
     grid_weights = np.linspace(0.0, 1.0, 21)
     grid_raw = []
     grid_density = []
+    grid_dcd_pr = []
+    grid_dcd_ent = []
+    grid_q90 = []
     for w in grid_weights:
         A_w = (1.0 - w) * A_0 + w * A_1
         sig_micro_w = noise_level * (1.0 + 1.5 * w)
@@ -278,12 +326,19 @@ def generate_dgp_d_smooth_drift(
             Sigma_w[s, s] = (sig_micro_w ** 2) * (np.eye(cluster_size) - (w / cluster_size) * (np.ones((cluster_size, cluster_size)) - np.eye(cluster_size)) / max(1, cluster_size - 1))
             Sigma_w[s, s] = 0.5 * (Sigma_w[s, s] + Sigma_w[s, s].T) + 1e-6 * np.eye(cluster_size)
         _, _, d_raw, d_dens = compute_linear_gaussian_dce_ground_truth(A_w, Sigma_w, q_dim)
+        pr_w, ent_w, q90_w = compute_linear_gaussian_dcd_ground_truth(A_w, Sigma_w)
         grid_raw.append(d_raw)
         grid_density.append(d_dens)
+        grid_dcd_pr.append(pr_w)
+        grid_dcd_ent.append(ent_w)
+        grid_q90.append(q90_w)
         
     true_dce_raw = np.interp(rho_series, grid_weights, grid_raw)
     true_dce_density = np.interp(rho_series, grid_weights, grid_density)
     true_optimal_dim = np.where(rho_series < 0.5, p_dim, q_dim).astype(np.int32)
+    true_dcd_pr = np.interp(rho_series, grid_weights, grid_dcd_pr)
+    true_dcd_entropy = np.interp(rho_series, grid_weights, grid_dcd_ent)
+    true_q90 = np.round(np.interp(rho_series, grid_weights, grid_q90)).astype(np.int32)
     
     for t in range(n_steps - 1):
         weight = rho_series[t]
@@ -304,7 +359,10 @@ def generate_dgp_d_smooth_drift(
         dgp_name="DGP-D_smooth_drift",
         extra_info={"rho_series": rho_series},
         true_dce_raw=true_dce_raw,
-        true_dce_density=true_dce_density
+        true_dce_density=true_dce_density,
+        true_dcd_pr=true_dcd_pr,
+        true_dcd_entropy=true_dcd_entropy,
+        true_q90=true_q90
     )
 
 
@@ -334,6 +392,9 @@ def generate_dgp_e_changing_dimension(
     true_dce_raw = np.zeros(n_steps - 1, dtype=np.float64)
     true_dce_density = np.zeros(n_steps - 1, dtype=np.float64)
     true_optimal_dim = np.zeros(n_steps - 1, dtype=np.int32)
+    true_dcd_pr = np.zeros(n_steps - 1, dtype=np.float64)
+    true_dcd_entropy = np.zeros(n_steps - 1, dtype=np.float64)
+    true_q90 = np.zeros(n_steps - 1, dtype=np.int32)
     
     t1, t2 = stages
     q1, q2, q3 = q_stages
@@ -353,7 +414,8 @@ def generate_dgp_e_changing_dimension(
             s = slice(c * c_sz, (c + 1) * c_sz)
             Sig_q[s, s] = (sig_M ** 2) + (sig_m ** 2) * (np.eye(c_sz) - 1.0 / c_sz)
         _, _, d_raw, d_dens = compute_linear_gaussian_dce_ground_truth(A_q, Sig_q, q_curr)
-        stage_params[q_curr] = (A_q, d_raw, d_dens)
+        dcd_pr_q, dcd_ent_q, q90_q = compute_linear_gaussian_dcd_ground_truth(A_q, Sig_q)
+        stage_params[q_curr] = (A_q, d_raw, d_dens, dcd_pr_q, dcd_ent_q, q90_q)
     
     for t in range(n_steps - 1):
         if t < t1:
@@ -363,10 +425,13 @@ def generate_dgp_e_changing_dimension(
         else:
             q_curr = q3
             
-        A_curr, d_raw_curr, d_dens_curr = stage_params[q_curr]
+        A_curr, d_raw_curr, d_dens_curr, pr_curr, ent_curr, q90_curr = stage_params[q_curr]
         true_dce_raw[t] = d_raw_curr
         true_dce_density[t] = d_dens_curr
         true_optimal_dim[t] = q_curr
+        true_dcd_pr[t] = pr_curr
+        true_dcd_entropy[t] = ent_curr
+        true_q90[t] = q90_curr
             
         c_size = p_dim // q_curr
         micro_noise = rng.randn(p_dim) * (noise_level * 2.0)
@@ -387,7 +452,10 @@ def generate_dgp_e_changing_dimension(
         transition_timestamp=stages,
         dgp_name="DGP-E_changing_dimension",
         true_dce_raw=true_dce_raw,
-        true_dce_density=true_dce_density
+        true_dce_density=true_dce_density,
+        true_dcd_pr=true_dcd_pr,
+        true_dcd_entropy=true_dcd_entropy,
+        true_q90=true_q90
     )
 
 
@@ -418,14 +486,29 @@ def generate_dgp_f_heteroskedastic_shock(
     t_start, t_end = shock_window
     base_noise = 0.2
     
-    for t in range(n_steps - 1):
-        noise_std = base_noise * (shock_factor if (t_start <= t < t_end) else 1.0)
-        states[t + 1] = A @ states[t] + noise_std * rng.randn(p_dim)
-        
+    pr_base, ent_base, q90_base = compute_linear_gaussian_dcd_ground_truth(
+        A, (base_noise ** 2) * np.eye(p_dim)
+    )
+    pr_shock, ent_shock, q90_shock = compute_linear_gaussian_dcd_ground_truth(
+        A, ((base_noise * shock_factor) ** 2) * np.eye(p_dim)
+    )
+    
     true_dce_raw = np.zeros(n_steps - 1, dtype=np.float64)
     true_dce_density = np.zeros(n_steps - 1, dtype=np.float64)
     true_optimal_dim = np.full(n_steps - 1, p_dim, dtype=np.int32)
+    true_dcd_pr = np.zeros(n_steps - 1, dtype=np.float64)
+    true_dcd_entropy = np.zeros(n_steps - 1, dtype=np.float64)
+    true_q90 = np.zeros(n_steps - 1, dtype=np.int32)
     
+    for t in range(n_steps - 1):
+        is_shock = (t_start <= t < t_end)
+        noise_std = base_noise * (shock_factor if is_shock else 1.0)
+        states[t + 1] = A @ states[t] + noise_std * rng.randn(p_dim)
+        
+        true_dcd_pr[t] = pr_shock if is_shock else pr_base
+        true_dcd_entropy[t] = ent_shock if is_shock else ent_base
+        true_q90[t] = q90_shock if is_shock else q90_base
+        
     return SyntheticBenchmarkData(
         states=states,
         true_dce=true_dce_density,
@@ -433,7 +516,10 @@ def generate_dgp_f_heteroskedastic_shock(
         transition_timestamp=shock_window,
         dgp_name="DGP-F_heteroskedastic_shock",
         true_dce_raw=true_dce_raw,
-        true_dce_density=true_dce_density
+        true_dce_density=true_dce_density,
+        true_dcd_pr=true_dcd_pr,
+        true_dcd_entropy=true_dcd_entropy,
+        true_q90=true_q90
     )
 
 
@@ -467,17 +553,32 @@ def generate_dgp_g_correlation_shock(
     L_dense = np.linalg.cholesky(dense_cov)
     base_std = 0.3
     
+    pr_base, ent_base, q90_base = compute_linear_gaussian_dcd_ground_truth(
+        A, (base_std ** 2) * np.eye(p_dim)
+    )
+    pr_shock, ent_shock, q90_shock = compute_linear_gaussian_dcd_ground_truth(
+        A, dense_cov
+    )
+    
+    true_dce_raw = np.zeros(n_steps - 1, dtype=np.float64)
+    true_dce_density = np.zeros(n_steps - 1, dtype=np.float64)
+    true_optimal_dim = np.full(n_steps - 1, p_dim, dtype=np.int32)
+    true_dcd_pr = np.zeros(n_steps - 1, dtype=np.float64)
+    true_dcd_entropy = np.zeros(n_steps - 1, dtype=np.float64)
+    true_q90 = np.zeros(n_steps - 1, dtype=np.int32)
+    
     for t in range(n_steps - 1):
-        if t_start <= t < t_end:
+        is_shock = (t_start <= t < t_end)
+        if is_shock:
             noise = L_dense @ rng.randn(p_dim)
         else:
             noise = base_std * rng.randn(p_dim)
         states[t + 1] = A @ states[t] + noise
         
-    true_dce_raw = np.zeros(n_steps - 1, dtype=np.float64)
-    true_dce_density = np.zeros(n_steps - 1, dtype=np.float64)
-    true_optimal_dim = np.full(n_steps - 1, p_dim, dtype=np.int32)
-    
+        true_dcd_pr[t] = pr_shock if is_shock else pr_base
+        true_dcd_entropy[t] = ent_shock if is_shock else ent_base
+        true_q90[t] = q90_shock if is_shock else q90_base
+        
     return SyntheticBenchmarkData(
         states=states,
         true_dce=true_dce_density,
@@ -485,7 +586,10 @@ def generate_dgp_g_correlation_shock(
         transition_timestamp=shock_window,
         dgp_name="DGP-G_correlation_shock",
         true_dce_raw=true_dce_raw,
-        true_dce_density=true_dce_density
+        true_dce_density=true_dce_density,
+        true_dcd_pr=true_dcd_pr,
+        true_dcd_entropy=true_dcd_entropy,
+        true_q90=true_q90
     )
 
 

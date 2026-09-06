@@ -87,21 +87,44 @@ def ensure_grid_estimates(from_scratch: bool = False) -> bool:
         ROOT_DIR / "results" / "empirical" / "ercot_dce_2021_retrospective.parquet",
         ROOT_DIR / "results" / "empirical" / "ercot_dce_2021_causal.parquet",
         ROOT_DIR / "results" / "empirical" / "western_dce_2021_retrospective.parquet",
-        ROOT_DIR / "results" / "empirical" / "eastern_dce_2021_retrospective.parquet"
+        ROOT_DIR / "results" / "empirical" / "eastern_dce_2021_retrospective.parquet",
+        ROOT_DIR / "results" / "empirical" / "ercot_dce_2022h2_retrospective.parquet",
+        ROOT_DIR / "results" / "empirical" / "western_dce_2022h2_retrospective.parquet",
+        ROOT_DIR / "results" / "empirical" / "eastern_dce_2022h2_retrospective.parquet",
     ]
     missing = [p for p in expected_parquets if not p.exists()]
     if not missing and not from_scratch:
-        logger.info("Empirical grid trajectory parquets verified.")
+        logger.info("Empirical grid trajectory parquets verified (2021 & 2022h2 panels).")
         return True
         
-    logger.info(f"Generating empirical grid trajectories (missing: {[p.name for p in missing]})...")
+    logger.info(f"Generating empirical grid trajectories across all periods (missing: {[p.name for p in missing]})...")
     env = os.environ.copy()
     env["PYTHONPATH"] = str(ROOT_DIR / "src")
     res = subprocess.run([
         sys.executable,
-        str(ROOT_DIR / "src" / "dce" / "experiments" / "run_grid_estimation.py")
+        str(ROOT_DIR / "src" / "dce" / "experiments" / "run_grid_estimation.py"),
+        "--period", "all"
     ], env=env)
     return res.returncode == 0
+
+
+def _verify_scientific_assertions():
+    """Verify published scientific invariants and rigor criteria."""
+    h1_path = ROOT_DIR / "results" / "empirical" / "h1_surrogate_results.json"
+    h3_path = ROOT_DIR / "results" / "empirical" / "h3_event_study_results.json"
+    if h1_path.exists():
+        with open(h1_path, "r") as f:
+            h1_data = json.load(f)
+        for inter in ("ercot", "western", "eastern"):
+            if inter in h1_data and "dcd_pr" in h1_data[inter]:
+                n_surr = h1_data[inter]["dcd_pr"].get("n_surrogates", 0)
+                assert n_surr == 1000, f"H1 {inter} n_surrogates must be 1000, got {n_surr}"
+    if h3_path.exists():
+        with open(h3_path, "r") as f:
+            h3_data = json.load(f)
+        events = h3_data.get("events", {})
+        assert len(events) == 5, f"H3 multi-event panel must have exactly 5 events, got {len(events)}"
+    logger.info("Scientific assertions verified: 5 events in H3, 1000 surrogates per grid in H1.")
 
 
 def ensure_hypotheses_testing(from_scratch: bool = False) -> bool:
@@ -114,17 +137,22 @@ def ensure_hypotheses_testing(from_scratch: bool = False) -> bool:
     missing = [j for j in expected_json if not j.exists()]
     if not missing and not from_scratch:
         logger.info("Empirical hypothesis testing JSON artifacts verified.")
+        _verify_scientific_assertions()
         return True
         
-    logger.info(f"Running hypothesis testing pipeline H1-H4 (missing: {[j.name for j in missing]})...")
+    logger.info(f"Running hypothesis testing pipeline H1-H4 with B=1000 surrogates (missing: {[j.name for j in missing]})...")
     env = os.environ.copy()
     env["PYTHONPATH"] = str(ROOT_DIR / "src")
     res = subprocess.run([
         sys.executable,
         str(ROOT_DIR / "src" / "dce" / "experiments" / "run_hypotheses_testing.py"),
-        "--test", "all"
+        "--test", "all",
+        "--n-surrogates", "1000"
     ], env=env)
-    return res.returncode == 0
+    if res.returncode != 0:
+        return False
+    _verify_scientific_assertions()
+    return True
 
 
 def generate_figures() -> bool:

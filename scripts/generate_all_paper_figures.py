@@ -39,38 +39,39 @@ def generate_figure_2_synthetic(output_path: str = "paper/figures/fig2_synthetic
     with open(mc_path, "r") as f:
         mc_summary = json.load(f)
         
-    # Panel A: Real simulation of DGP-C (Abrupt Emergence) with analytical ground truth
+    # Panel A: Real simulation of DGP-E (Changing Causal Dimension 8 -> 4 -> 2)
     ax1 = fig.add_subplot(gs[0, 0])
+    dgp_e = get_synthetic_benchmark("dgp_e", n_steps=1200, stages=(400, 800), p_dim=16, q_stages=(8, 4, 2), seed=42)
+    model_e = LocalLinearGaussianDCE(macro_dims=[1, 2, 4, 8], bandwidth=48.0, causal_only=False)
+    model_e.fit(dgp_e.states)
+    
+    t_eval_e = np.arange(len(model_e.dcd_pr_))
+    ax1.plot(t_eval_e, dgp_e.true_dcd_pr[:len(t_eval_e)], color=COLORS["neutral_grey"], ls="--", lw=1.5, label=r"Ground Truth $DCD_t^{\text{PR}}$ ($8\to 4\to 2$)")
+    ax1.plot(t_eval_e, model_e.dcd_pr_, color=COLORS["accent_purple"], lw=1.4, label=r"Estimated $DCD_t^{\text{PR}}$")
+    ax1.axvline(400, color=COLORS["accent_orange"], ls=":", lw=1.2, label=r"Transitions $\tau_1, \tau_2$")
+    ax1.axvline(800, color=COLORS["accent_orange"], ls=":", lw=1.2)
+    ax1.set_title(r"a | Dynamic Causal Dimensionality Tracking (DGP-E)", fontweight="bold", loc="left")
+    ax1.set_xlabel("Time step t")
+    ax1.set_ylabel(r"$DCD_t^{\text{PR}}$ (degrees of freedom)")
+    ax1.set_ylim(0, 18)
+    ax1.legend(loc="upper right", frameon=True, fontsize=6.5)
+    ax1.grid(True)
+    
+    # Panel B: DGP-C (Abrupt Causal Concentration Surge)
+    ax2 = fig.add_subplot(gs[0, 1])
     dgp_c = get_synthetic_benchmark("dgp_c", n_steps=600, transition_t=300, p_dim=8, q_dim=2, seed=42)
     model_c = LocalLinearGaussianDCE(macro_dims=[1, 2, 4, 8], bandwidth=24.0, causal_only=False)
     model_c.fit(dgp_c.states)
     
-    t_eval = np.arange(len(model_c.optimal_dce_density_))
-    ax1.plot(t_eval, dgp_c.true_dce_density[:len(t_eval)], color=COLORS["neutral_grey"], ls="--", lw=1.5, label="Ground Truth $DCE^{\\text{density}}$")
-    ax1.plot(t_eval, model_c.optimal_dce_density_, color=COLORS["primary_blue"], lw=1.5, label="LocalAffineGaussianDCE")
-    ax1.axvline(300, color=COLORS["accent_orange"], ls=":", lw=1.2, label=r"Transition $\tau=300$")
-    ax1.set_title("a | Abrupt Causal Emergence Tracking (DGP-C)", fontweight="bold", loc="left")
-    ax1.set_xlabel("Time step t")
-    ax1.set_ylabel(r"$DCE_t^{\text{density}}$ (nats/dim)")
-    ax1.legend(loc="upper left", frameon=True, fontsize=6.5)
-    ax1.grid(True)
-    
-    # Panel B: Dimension Recovery Accuracy across DGPs
-    ax2 = fig.add_subplot(gs[0, 1])
-    dgp_keys = ["dgp_a", "dgp_b", "dgp_c", "dgp_e", "dgp_f"]
-    dgp_labels = ["DGP-A\n(Null Stat)", "DGP-B\n(Null Nonstat)", "DGP-C\n(Abrupt)", "DGP-E\n(Dim Shift)", "DGP-F\n(Shock)"]
-    acc_raw = [mc_summary[k]["mean_dim_accuracy_raw"] * 100.0 for k in dgp_keys]
-    
-    x = np.arange(len(dgp_keys))
-    w = 0.45
-    ax2.bar(x, acc_raw, width=w, color=COLORS["primary_blue"], label="Dimension Recovery ($q^*$)")
-    ax2.set_title(r"b | Dimension Recovery Accuracy $P(\hat{q}^* = q^*)$", fontweight="bold", loc="left")
-    ax2.set_xticks(x)
-    ax2.set_xticklabels(dgp_labels)
-    ax2.set_ylabel("Accuracy (%)")
-    ax2.set_ylim(0, 115)
-    ax2.legend(loc="upper right", frameon=True, fontsize=6.5)
-    ax2.grid(axis="y")
+    t_eval_c = np.arange(len(model_c.optimal_dce_density_))
+    ax2.plot(t_eval_c, dgp_c.true_dce_density[:len(t_eval_c)], color=COLORS["neutral_grey"], ls="--", lw=1.5, label=r"Ground Truth $CCG_t$")
+    ax2.plot(t_eval_c, model_c.optimal_dce_density_, color=COLORS["primary_blue"], lw=1.4, label=r"Estimated $CCG_t$")
+    ax2.axvline(300, color=COLORS["accent_orange"], ls=":", lw=1.2, label=r"Transition $\tau=300$")
+    ax2.set_title("b | Abrupt Emergence / Concentration (DGP-C)", fontweight="bold", loc="left")
+    ax2.set_xlabel("Time step t")
+    ax2.set_ylabel(r"$CCG_t$ (nats/dim)")
+    ax2.legend(loc="upper left", frameon=True, fontsize=6.5)
+    ax2.grid(True)
     
     # Panel C: False Positive Rate under Null Conditions with Clopper-Pearson 95% CIs
     ax3 = fig.add_subplot(gs[1, 0])
@@ -100,7 +101,7 @@ def generate_figure_2_synthetic(output_path: str = "paper/figures/fig2_synthetic
     dgp_eval_labels = ["DGP-A", "DGP-B", "DGP-C", "DGP-D", "DGP-F"]
     
     x_eval = np.arange(len(eval_dgps))
-    ax4.bar(x_eval, rmse_vals, yerr=std_vals, width=0.45, color=COLORS["accent_green"], capsize=4, label="RMSE ($DCE^{\\text{density}}$)")
+    ax4.bar(x_eval, rmse_vals, yerr=std_vals, width=0.45, color=COLORS["accent_green"], capsize=4, label="RMSE ($CCG_t$)")
     ax4.set_title(r"d | Tracking Error Across Benchmark DGPs", fontweight="bold", loc="left")
     ax4.set_xticks(x_eval)
     ax4.set_xticklabels(dgp_eval_labels)
@@ -176,7 +177,8 @@ def generate_figure_4_vre_response(output_path: str = "paper/figures/fig4_vre_no
                 color=COLORS["primary_blue"], alpha=0.15, s=6, label="Hourly Obs")
     ax1.plot(vre_grid, p_dep, color=COLORS["accent_orange"], lw=2.0, label=r"GAM Spline $s(\text{VRE})$")
     ax1.fill_between(vre_grid, confi[:, 0], confi[:, 1], color=COLORS["accent_orange"], alpha=0.25, label="95% CI")
-    ax1.axvline(gamma, color="firebrick", ls="--", lw=1.4, label=f"Threshold $\hat{{\gamma}}={gamma:.1f}\\%$ (Sup-Wald $p=0.585$)")
+    p_sup = ercot_h2.get("sup_wald_pvalue", ercot_h2.get("davies_pvalue", 0.787))
+    ax1.axvline(gamma, color="firebrick", ls="--", lw=1.4, label=f"Candidate Threshold $\\hat{{\\gamma}}={gamma:.1f}\\%$ (Sup-Wald $p={p_sup:.3f}$)")
     ax1.set_title("a | Nonlinear Causal Response to VRE (ERCOT)", fontweight="bold", loc="left")
     ax1.set_xlabel("Renewable Penetration VRE (%)")
     ax1.set_ylabel(r"Partial Effect on $DCD_t^{\text{PR}}$")

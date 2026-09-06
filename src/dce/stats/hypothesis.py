@@ -272,7 +272,12 @@ def compute_h2_gamm_and_threshold(
     best_gamma = float(cand_gammas[0])
     best_sse = np.inf
     
-    X_ctrl = np.column_stack([np.ones(len(y_gam)), net_load_norm, hours, doy])
+    ctrl_cols = [np.ones(len(y_gam))]
+    if net_load_series is not None:
+        net_load_norm = (net_load_series - np.mean(net_load_series)) / (np.std(net_load_series) + 1e-4)
+        ctrl_cols.append(net_load_norm)
+    ctrl_cols.extend([hours, doy])
+    X_ctrl = np.column_stack(ctrl_cols)
     
     # Baseline linear M0 with HAC covariance
     X_m0 = np.column_stack([X_ctrl, vre_series])
@@ -306,34 +311,55 @@ def compute_h2_gamm_and_threshold(
     
     sup_wald = float(np.max(wald_stats))
     
-    # 3. Hansen (1996) Supremum-Wald Moving-Block Bootstrap Test (B=2000)
+    # 3. Hansen (1996) Supremum-Wald Moving-Block Bootstrap Test with Exact Newey-West HAC (B=2000)
     n = len(y_gam)
     block_len = 48  # 48-hour blocks preserve diurnal autocorrelation
     n_blocks = int(np.ceil(n / block_len))
     rng = np.random.RandomState(42)
     
-    # Pre-project candidate regressors using Frisch-Waugh-Lovell
-    Q, _ = np.linalg.qr(X_m0)
-    P_perp = lambda V: V - Q @ (Q.T @ V)
-    Z = np.column_stack([np.maximum(0.0, vre_series - g) for g in cand_gammas])
-    Z_tilde = P_perp(Z)
-    z_norms = np.sum(Z_tilde ** 2, axis=0) + 1e-12
-    sigma2_resid = np.var(resid_m0, ddof=X_m0.shape[1])
+    # Precompute design matrices, projection weights, and influence vectors for all candidate gammas
+    maxlags = 24
+    bartlett_weights = 1.0 - np.arange(1, maxlags + 1) / (maxlags + 1.0)
     
-    # Bootstrap null distribution of T_sup under H0
+    X_seg_list = []
+    H_list = []
+    h_list = []
+    for gamma in cand_gammas:
+        vre_hinge = np.maximum(0.0, vre_series - gamma)
+        X_seg = np.column_stack([X_ctrl, vre_series, vre_hinge])
+        H = np.linalg.pinv(X_seg.T @ X_seg) @ X_seg.T
+        h = H[-1, :]
+        X_seg_list.append(X_seg)
+        H_list.append(H)
+        h_list.append(h)
+    
+    # Bootstrap null distribution of T_sup under H0: y_t = X_m0 @ beta_0 + e_t
     block_starts_null = rng.randint(0, n - block_len + 1, size=(n_bootstrap, n_blocks))
     boot_sup_wald = []
     
     for b in range(n_bootstrap):
         indices = np.concatenate([np.arange(st, st + block_len) for st in block_starts_null[b]])[:n]
         e_b = resid_m0[indices]
-        e_tilde = P_perp(e_b)
-        # Score-based Wald statistic across grid
-        score_wald = ((Z_tilde.T @ e_tilde) ** 2) / (z_norms * sigma2_resid)
-        boot_sup_wald.append(float(np.max(score_wald)))
+        y_b = fitted_m0 + e_b
+        
+        wald_b_list = []
+        for g in range(len(cand_gammas)):
+            beta_b = H_list[g] @ y_b
+            resid_b = y_b - X_seg_list[g] @ beta_b
+            v_b = h_list[g] * resid_b
+            
+            # Exact Newey-West HAC variance with Bartlett kernel (matching statsmodels cov_type='HAC')
+            v2 = np.sum(v_b ** 2)
+            lag_sums = np.array([np.dot(v_b[l:], v_b[:-l]) for l in range(1, maxlags + 1)])
+            var_hac = v2 + 2.0 * np.dot(bartlett_weights, lag_sums)
+            
+            t_stat_b = beta_b[-1] / np.sqrt(max(var_hac, 1e-12))
+            wald_b_list.append(t_stat_b ** 2)
+            
+        boot_sup_wald.append(float(np.max(wald_b_list)))
         
     boot_sup_wald = np.array(boot_sup_wald)
-    # Hansen supremum-Wald bootstrap p-value
+    # Hansen supremum-Wald exact HAC bootstrap p-value
     sup_wald_pval = float((np.sum(boot_sup_wald >= sup_wald) + 1.0) / (n_bootstrap + 1.0))
     
     # 4. Moving-Block Bootstrap for Threshold Parameter 95% Confidence Interval (B=2000)
