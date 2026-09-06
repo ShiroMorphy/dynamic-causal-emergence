@@ -175,6 +175,10 @@ def compile_manuscript() -> bool:
     logger.info("Compiling publication manuscript paper/main.tex...")
     paper_dir = ROOT_DIR / "paper"
     
+    if not shutil.which("pdflatex"):
+        logger.warning("pdflatex not found in system PATH. Skipping LaTeX manuscript compilation.")
+        return True
+        
     # Pass 1: pdflatex
     p1 = subprocess.run(
         ["pdflatex", "-interaction=nonstopmode", "-output-directory=paper", "paper/main.tex"],
