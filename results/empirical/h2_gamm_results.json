@@ -7,9 +7,9 @@
         0.1341496501345469,
         0.4059481663557116
       ],
-      "davies_pvalue": 0.7871064467766117,
+      "davies_pvalue": 0.09095452273863068,
       "sup_wald_stat": 7.324619838983901,
-      "sup_wald_pvalue": 0.7871064467766117,
+      "sup_wald_pvalue": 0.09095452273863068,
       "model_comparison": [
         {
           "Model": "M0_Linear",
@@ -644,9 +644,9 @@
         0.1341496501345469,
         0.4692015986074618
       ],
-      "davies_pvalue": 0.7261369315342329,
+      "davies_pvalue": 0.03948025987006497,
       "sup_wald_stat": 10.13522435971218,
-      "sup_wald_pvalue": 0.7261369315342329,
+      "sup_wald_pvalue": 0.03948025987006497,
       "model_comparison": [
         {
           "Model": "M0_Linear",
@@ -1280,9 +1280,9 @@
       0.1341496501345469,
       0.4059481663557116
     ],
-    "davies_pvalue": 0.7871064467766117,
+    "davies_pvalue": 0.09095452273863068,
     "sup_wald_stat": 7.324619838983901,
-    "sup_wald_pvalue": 0.7871064467766117,
+    "sup_wald_pvalue": 0.09095452273863068,
     "model_comparison": [
       {
         "Model": "M0_Linear",
@@ -1918,9 +1918,9 @@
         0.10744085351181966,
         0.3717020944311932
       ],
-      "davies_pvalue": 0.657671164417791,
+      "davies_pvalue": 0.12143928035982009,
       "sup_wald_stat": 6.7362792526746755,
-      "sup_wald_pvalue": 0.657671164417791,
+      "sup_wald_pvalue": 0.12143928035982009,
       "model_comparison": [
         {
           "Model": "M0_Linear",
@@ -2555,9 +2555,9 @@
         0.10744085351181966,
         0.3717020944311932
       ],
-      "davies_pvalue": 0.6991504247876063,
+      "davies_pvalue": 0.1664167916041979,
       "sup_wald_stat": 5.968688779523097,
-      "sup_wald_pvalue": 0.6991504247876063,
+      "sup_wald_pvalue": 0.1664167916041979,
       "model_comparison": [
         {
           "Model": "M0_Linear",
@@ -3191,9 +3191,9 @@
       0.10744085351181966,
       0.3717020944311932
     ],
-    "davies_pvalue": 0.657671164417791,
+    "davies_pvalue": 0.12143928035982009,
     "sup_wald_stat": 6.7362792526746755,
-    "sup_wald_pvalue": 0.657671164417791,
+    "sup_wald_pvalue": 0.12143928035982009,
     "model_comparison": [
       {
         "Model": "M0_Linear",

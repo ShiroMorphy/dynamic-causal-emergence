@@ -155,6 +155,7 @@ def execute_h1_test(output_dir: str = "results/empirical", n_surrogates: int = 1
                 "significant_ratio_fdr": h1_res_ccg.significant_ratio_fdr,
                 "empirical_sample": empirical_ccg[:100].tolist(),
                 "critical_envelope_sample": (h1_res_ccg.critical_envelope[:100].tolist() if h1_res_ccg.critical_envelope is not None else []),
+                "surrogate_95th_sample": (h1_res_ccg.surrogate_dce_95th[:100].tolist() if h1_res_ccg.surrogate_dce_95th is not None else [])
             }
         }
         print(f"[{inter}] DCD_PR Mean={h1_res_dcd.mean_stat_empirical:.3f} (p={h1_res_dcd.mean_stat_pvalue:.4f}, extreme p={h1_res_dcd.extreme_stat_pvalue:.4f}) | CCG Mean={h1_res_ccg.mean_stat_empirical:.3f} (p={h1_res_ccg.mean_stat_pvalue:.4f})")
@@ -183,7 +184,7 @@ def execute_h1_test(output_dir: str = "results/empirical", n_surrogates: int = 1
         "mean_stat_empirical": ercot_res["ccg"]["mean_stat_empirical"],
         "mean_stat_pvalue": ercot_res["ccg"]["mean_stat_pvalue"],
         "empirical_dce_sample": ercot_res["ccg"]["empirical_sample"],
-        "surrogate_95th_sample": ercot_res["ccg"]["surrogate_95th_sample"]
+        "surrogate_95th_sample": ercot_res["ccg"].get("surrogate_95th_sample", ercot_res["ccg"]["critical_envelope_sample"])
     }
     
     out_path = os.path.join(output_dir, "h1_surrogate_results.json")

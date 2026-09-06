@@ -119,12 +119,14 @@ def _verify_scientific_assertions():
             if inter in h1_data and "dcd_pr" in h1_data[inter]:
                 n_surr = h1_data[inter]["dcd_pr"].get("n_surrogates", 0)
                 assert n_surr == 1000, f"H1 {inter} n_surrogates must be 1000, got {n_surr}"
+                T_val = h1_data[inter].get("T", 0)
+                assert T_val >= 8760, f"H1 {inter} T must be >= 8760 (full continental annual series), got {T_val}"
     if h3_path.exists():
         with open(h3_path, "r") as f:
             h3_data = json.load(f)
         events = h3_data.get("events", {})
         assert len(events) == 5, f"H3 multi-event panel must have exactly 5 events, got {len(events)}"
-    logger.info("Scientific assertions verified: 5 events in H3, 1000 surrogates per grid in H1.")
+    logger.info("Scientific assertions verified: 5 events in H3, 1000 surrogates & T>=8760 per grid in H1.")
 
 
 def ensure_hypotheses_testing(from_scratch: bool = False) -> bool:
