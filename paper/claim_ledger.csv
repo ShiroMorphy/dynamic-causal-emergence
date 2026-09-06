@@ -9,3 +9,5 @@ C05,"Statistically significant DCE episodes occur in US power grid",results/empi
 C06,"VRE has a nonlinear association with DCD with continuous GAM spline coordination",results/empirical/h2_gamm_results.json,src/dce/experiments/run_hypotheses_testing.py,verified
 C07,"Severe grid stress events exhibit acute macroscopic causal reorganization and concentration gain without dimensional collapse",results/empirical/h3_event_study_results.json,src/dce/experiments/run_hypotheses_testing.py,verified
 C08,"One-sided causal DCE evaluation indicates no unconditional linear forecast error reduction",results/empirical/h4_forecast_results.json,src/dce/experiments/run_hypotheses_testing.py,falsified_reported_null
+C09,"Proposed DCD outperforms sliding-window PCA and unregularized causal spectrum under equalized information budgets",results/synthetic/baseline_comparison_results.json,scripts/generate_baseline_comparison.py,verified
+C10,"Frozen hold-out benchmark DGP-K generalizes out-of-sample with low RMSE and robust dimensional recovery",results/synthetic/baseline_comparison_results.json,scripts/generate_baseline_comparison.py,verified

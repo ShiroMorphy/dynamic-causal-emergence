@@ -94,3 +94,26 @@ def test_dgp_h_kuramoto_order_parameter():
     data = generate_dgp_h_kuramoto(n_steps=400, n_oscillators=16)
     order_p = data.extra_info["order_parameter"]
     assert np.mean(order_p[-50:]) > np.mean(order_p[:50])
+
+
+def test_dgp_j_hierarchical_transition():
+    """DGP-J must transition through dimensions 6 -> 3 -> 2."""
+    from dce.datasets.synthetic import generate_dgp_j_hierarchical_transition
+    data = generate_dgp_j_hierarchical_transition(n_steps=600, stages=(200, 400), p_dim=12)
+    assert np.all(data.true_optimal_dim[:200] == 6)
+    assert np.all(data.true_optimal_dim[200:400] == 3)
+    assert np.all(data.true_optimal_dim[400:] == 2)
+    assert data.true_dcd_pr is not None
+    assert np.all(np.isfinite(data.true_dcd_pr))
+
+
+def test_dgp_k_holdout_transition():
+    """DGP-K must transition through dimensions 5 -> 2 -> 1 on 10D system."""
+    from dce.datasets.synthetic import generate_dgp_k_holdout_transition
+    data = generate_dgp_k_holdout_transition(n_steps=600, stages=(200, 400), p_dim=10)
+    assert np.all(data.true_optimal_dim[:200] == 5)
+    assert np.all(data.true_optimal_dim[200:400] == 2)
+    assert np.all(data.true_optimal_dim[400:] == 1)
+    assert data.true_dcd_pr is not None
+    assert np.all(np.isfinite(data.true_dcd_pr))
+    assert data.true_q90 is not None

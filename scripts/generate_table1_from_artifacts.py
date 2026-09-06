@@ -20,7 +20,7 @@ DGP_METADATA = {
     "dgp_g": {"name": "DGP-G", "desc": "Contemporary Correlation Shock", "dim": "$p=8$"},
     "dgp_h": {"name": "DGP-H", "desc": "Kuramoto Synchronization", "dim": "$16 \\to 1$"},
     "dgp_i": {"name": "DGP-I", "desc": "Chaotic Coupled Maps", "dim": "$8 \\to 2$"},
-    "dgp_j": {"name": "DGP-J", "desc": "Hierarchical Scale Transition (Untouched)", "dim": "$12 \\to 6,3,2$"},
+    "dgp_j": {"name": "DGP-J", "desc": "Hierarchical Scale Transition", "dim": "$12 \\to 6,3,2$"},
 }
 
 
@@ -35,7 +35,7 @@ def format_latex_table() -> str:
     lines.append(r"\begin{table*}[t]")
     lines.append(r"\centering")
     lines.append(r"\footnotesize")
-    lines.append(r"\caption{\textbf{Comprehensive Monte Carlo Benchmark Across Canonical Data Generating Processes ($R=100$ Replications).} Evaluation of the reference local linear-Gaussian estimator with Gavish-Donoho optimal singular value thresholding across DGPs A--J ($T=500$--$2400$). Observed false-positive rates under strict null conditions (DGPs A, B, F, G) confirm zero false alarms ($\text{FPR}^{\text{raw}} = 0/100$, 95\% Clopper-Pearson CI $[0.000, 0.036]$). On the multi-scale dynamic dimensionality benchmarks (DGP-E: $8 \to 4 \to 2$ and untouched DGP-J: $6 \to 3 \to 2$), the estimator accurately recovers time-varying causal scales with low RMSE and zero empirical over-contraction on null systems.}")
+    lines.append(r"\caption{\textbf{Comprehensive Monte Carlo Benchmark Across Canonical Data Generating Processes ($R=100$ Replications).} Evaluation of the reference local linear-Gaussian estimator with Gavish-Donoho-inspired finite-sample spectral thresholding across DGPs A--J ($T=500$--$2400$). Observed false-positive rates under strict null conditions (DGPs A, B, F, G) confirm zero false alarms ($\text{FPR}^{\text{raw}} = 0/100$, 95\% Clopper-Pearson CI $[0.000, 0.036]$). On the multi-scale dynamic dimensionality benchmarks (DGP-E: $8 \to 4 \to 2$ and additional hierarchical benchmark DGP-J: $6 \to 3 \to 2$), the estimator accurately recovers time-varying causal scales with low RMSE. In uncoupled null systems, finite-sample spectral dispersion induces expected downward bias on the participation ratio while preserving exact raw false-positive rejection.}")
     lines.append(r"\label{tab:benchmarks}")
     lines.append(r"\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}llcccccc@{}}")
     lines.append(r"\toprule")

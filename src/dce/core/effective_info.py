@@ -191,8 +191,8 @@ def compute_causal_spectrum(
     Numerically stable via Cholesky factor L of Sigma and SVD of M = L^{-1} A,
     guaranteeing real non-negative eigenvalues, Fisher causal projection vectors V,
     and exact rotational invariance.
-    When n_eff is provided and denoising is enabled, applies Gavish & Donoho (2014)
-    optimal singular value thresholding calibrated to the directional noise floor.
+    When n_eff is provided and denoising is enabled, applies a Gavish & Donoho (2014)-inspired
+    finite-sample spectral threshold calibrated to the local empirical noise floor.
     """
     A_arr = np.asarray(transition_matrix_A, dtype=np.float64)
     Sigma_arr = np.asarray(noise_covariance_Sigma, dtype=np.float64)
@@ -247,7 +247,7 @@ def compute_causal_spectrum(
         beta = min(0.99, float(d) / float(n_eff))
         sig_x_min = max(float(min_eig_cov_x), 1e-4) if min_eig_cov_x is not None else 1.0
         
-        if denoising in ("gavish_donoho", "hard", "optimal"):
+        if denoising in ("gavish_donoho", "gavish_donoho_inspired", "empirical_spectral_threshold", "hard", "optimal"):
             lam_star = gavish_donoho_lambda_star(beta)
             lambda_cut = (lam_star ** 2) * beta / sig_x_min
             lambdas = np.where(lambdas > lambda_cut, lambdas, 0.0)

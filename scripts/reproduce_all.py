@@ -86,6 +86,22 @@ def ensure_synthetic_benchmarks(from_scratch: bool = False) -> bool:
     return res.returncode == 0
 
 
+def ensure_baseline_comparison(from_scratch: bool = False) -> bool:
+    target = ROOT_DIR / "results" / "synthetic" / "baseline_comparison_results.json"
+    if target.exists() and not from_scratch:
+        logger.info(f"Baseline comparison artifact verified: {target.relative_to(ROOT_DIR)}")
+        return True
+
+    logger.info("Running baseline comparison benchmarks (DGPs C, D, E, J, K; R=100)...")
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(ROOT_DIR / "src")
+    res = subprocess.run([
+        sys.executable,
+        str(ROOT_DIR / "scripts" / "generate_baseline_comparison.py")
+    ], env=env)
+    return res.returncode == 0
+
+
 def ensure_grid_estimates(from_scratch: bool = False) -> bool:
     expected_parquets = [
         ROOT_DIR / "results" / "empirical" / "ercot_dce_2021_retrospective.parquet",
@@ -230,6 +246,16 @@ def compile_manuscript() -> bool:
         shutil.copy2(pdf_path, sub_pdf)
         logger.info(f"Manuscript compiled successfully: {pdf_path} ({pdf_path.stat().st_size:,} bytes)")
         logger.info(f"Copied submission PDF to {sub_pdf}")
+        try:
+            import pypdf
+            reader = pypdf.PdfReader(str(sub_pdf))
+            n_pages = len(reader.pages)
+            if n_pages != 12:
+                logger.error(f"PAGE BUDGET VIOLATION: Expected exactly 12 pages, got {n_pages}!")
+                return False
+            logger.info(f"Page budget verified: strictly {n_pages}/12 pages.")
+        except ImportError:
+            pass
         return True
     return False
 
@@ -264,6 +290,12 @@ def main():
         synth_ok = ensure_synthetic_benchmarks(from_scratch=args.from_scratch)
         if not synth_ok:
             logger.error("Synthetic benchmarks failed.")
+            sys.exit(1)
+
+        # Step 2b: Baseline comparison suite (Table 2)
+        base_ok = ensure_baseline_comparison(from_scratch=args.from_scratch)
+        if not base_ok:
+            logger.error("Baseline comparison suite failed.")
             sys.exit(1)
 
         # Step 3: Empirical grid estimates

@@ -234,9 +234,14 @@ def generate_figure_5_uri(output_path: str = "paper/figures/fig5_extreme_events_
     
     # Panel B: Dynamic Causal Participation Ratio DCD_PR
     dcd_event = uri_slice["dcd_pr"].values
-    ax2.plot(ts, dcd_event, color=COLORS["accent_purple"], lw=1.4, label=r"Event $DCD_t^{\text{PR}}$ ($\Delta=+0.328$, $p=0.253$, non-collapse)")
-    ax2.axhline(np.percentile(df_ercot["dcd_pr"], 10.0), color="firebrick", ls="--", lw=1.0, label="10th Percentile Baseline ($4.87$)")
-    ax2.set_title(r"b | Causal Participation Ratio $DCD_t^{\text{PR}}$ (Degrees of Freedom Maintained)", fontweight="bold", loc="left")
+    delta_dcd = float(h3.get("obs_delta_dcd_pr", 1.094))
+    p_dcd = float(h3.get("p_val_dcd_block_perm", 0.0010))
+    thresh_10 = float(h3.get("collapse_threshold_dcd10", np.percentile(df_ercot["dcd_pr"], 10.0)))
+    ax2.plot(ts, dcd_event, color=COLORS["accent_purple"], lw=1.4,
+             label=r"Event $DCD_t^{\text{PR}}$ ($\Delta=" + f"{delta_dcd:+.3f}, p={p_dcd:.3f}$" + ", non-collapse)")
+    ax2.axhline(thresh_10, color="firebrick", ls="--", lw=1.0,
+                label=r"10th Percentile Baseline (" + f"{thresh_10:.2f}" + r")")
+    ax2.set_title(r"b | Causal Participation Ratio $DCD_t^{\text{PR}}$ (Degrees of Freedom Expanded, Non-Collapse)", fontweight="bold", loc="left")
     ax2.set_ylabel(r"Participation Ratio $DCD_t^{\text{PR}}$")
     ax2.set_xlabel("UTC Date (Feb 2021)")
     ax2.legend(loc="upper right", frameon=True, fontsize=6.5)

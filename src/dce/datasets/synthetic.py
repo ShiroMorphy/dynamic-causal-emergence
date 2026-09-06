@@ -585,6 +585,18 @@ def generate_dgp_g_correlation_shock(
         A, dense_cov
     )
     
+    # Analytical CCG ground truth during shock:
+    # Under Fisher causal projection F = A^T Sigma^{-1} A, the 7 low-noise modes have lambda = 4.9,
+    # while the collective mode along v has lambda = 0.5444.
+    # EI(X)/8 = 1/16 * [ln(1.5444) + 7 ln(5.9)] = 0.8037 nats.
+    # Selecting any of the 7 low-noise modes yields EI(V^(1))/1 = 1/2 ln(5.9) = 0.8875 nats.
+    # Thus, CCG_true = 0.8875 - 0.8037 = +0.0838 nats, while Delta EI^{raw} < 0.
+    F_dense = A.T @ np.linalg.inv(dense_cov) @ A
+    evals_f, evecs_f = np.linalg.eigh(F_dense)
+    idx_f = np.argsort(evals_f)[::-1]
+    W_shock_1 = evecs_f[:, idx_f[:1]]
+    _, _, d_raw_shock, d_dens_shock = compute_linear_gaussian_dce_ground_truth(A, dense_cov, 1, W=W_shock_1)
+
     true_dce_raw = np.zeros(n_steps - 1, dtype=np.float64)
     true_dce_density = np.zeros(n_steps - 1, dtype=np.float64)
     true_optimal_dim = np.full(n_steps - 1, p_dim, dtype=np.int32)
@@ -596,8 +608,14 @@ def generate_dgp_g_correlation_shock(
         is_shock = (t_start <= t < t_end)
         if is_shock:
             noise = L_dense @ rng.randn(p_dim)
+            true_dce_density[t] = d_dens_shock
+            true_optimal_dim[t] = 1
+            true_dce_raw[t] = d_raw_shock
         else:
             noise = base_std * rng.randn(p_dim)
+            true_dce_density[t] = 0.0
+            true_optimal_dim[t] = p_dim
+            true_dce_raw[t] = 0.0
         states[t + 1] = A @ states[t] + noise
         
         true_dcd_pr[t] = pr_shock if is_shock else pr_base
@@ -737,7 +755,7 @@ def generate_dgp_i_chaotic_nonlinear(
 
 
 # =============================================================================
-# DGP-J: Untouched Dynamic Scale Transition (Hierarchical Branching)
+# DGP-J: Additional Hierarchical Dynamic Scale Transition
 # =============================================================================
 def generate_dgp_j_hierarchical_transition(
     n_steps: int = 2400,
@@ -748,8 +766,8 @@ def generate_dgp_j_hierarchical_transition(
     seed: int = 42
 ) -> SyntheticBenchmarkData:
     """
-    DGP-J: Untouched Dynamic Scale Transition (Hierarchical Branching).
-    Demonstrates dynamic causal scale switching on an out-of-sample benchmark (p=12):
+    DGP-J: Additional Hierarchical Dynamic Scale Transition.
+    Evaluates dynamic causal scale switching on an extended high-dimensional benchmark (p=12):
     Stage 1 (t < 800): q^* = 6 (pairs of 2 micro-nodes)
     Stage 2 (800 <= t < 1600): q^* = 3 (clusters of 4 micro-nodes)
     Stage 3 (t >= 1600): q^* = 2 (clusters of 6 micro-nodes)
@@ -830,6 +848,99 @@ def generate_dgp_j_hierarchical_transition(
 
 
 # =============================================================================
+# DGP-K: Pre-Specified Hold-Out Benchmark (10 -> 5 -> 2 -> 1 Transition)
+# =============================================================================
+def generate_dgp_k_holdout_transition(
+    n_steps: int = 2400,
+    stages: Tuple[int, int] = (800, 1600),
+    p_dim: int = 10,
+    q_stages: Tuple[int, int, int] = (5, 2, 1),
+    noise_level: float = 0.15,
+    seed: int = 42
+) -> SyntheticBenchmarkData:
+    """
+    DGP-K: Pre-specified Hold-Out Benchmark.
+    Frozen dynamic scale transition on a 10-node system without post-hoc estimator tuning:
+    Stage 1 (t < 800): q^* = 5 (pairs of 2 micro-nodes)
+    Stage 2 (800 <= t < 1600): q^* = 2 (clusters of 5 micro-nodes)
+    Stage 3 (t >= 1600): q^* = 1 (monolithic macro-cluster of 10 micro-nodes)
+    """
+    if stages is None or stages[1] >= n_steps:
+        stages = (n_steps // 3, 2 * n_steps // 3)
+
+    rng = np.random.RandomState(seed)
+    states = np.zeros((n_steps, p_dim), dtype=np.float64)
+    true_dce_raw = np.zeros(n_steps - 1, dtype=np.float64)
+    true_dce_density = np.zeros(n_steps - 1, dtype=np.float64)
+    true_optimal_dim = np.zeros(n_steps - 1, dtype=np.int32)
+    true_dcd_pr = np.zeros(n_steps - 1, dtype=np.float64)
+    true_dcd_entropy = np.zeros(n_steps - 1, dtype=np.float64)
+    true_q90 = np.zeros(n_steps - 1, dtype=np.int32)
+    
+    t1, t2 = stages
+    q1, q2, q3 = q_stages
+    states[0] = rng.randn(p_dim)
+    
+    stage_params = {}
+    for q_curr in (q1, q2, q3):
+        c_sz = p_dim // q_curr
+        A_q = np.zeros((p_dim, p_dim))
+        for c in range(q_curr):
+            tgt = (c + 1) % q_curr
+            A_q[tgt * c_sz : (tgt + 1) * c_sz, c * c_sz : (c + 1) * c_sz] = 0.82 / c_sz
+        sig_m = noise_level * 2.0
+        sig_M = noise_level
+        Sig_q = np.zeros((p_dim, p_dim))
+        for c in range(q_curr):
+            s = slice(c * c_sz, (c + 1) * c_sz)
+            Sig_q[s, s] = (sig_M ** 2) + (sig_m ** 2) * (np.eye(c_sz) - 1.0 / c_sz)
+        _, _, d_raw, d_dens = compute_linear_gaussian_dce_ground_truth(A_q, Sig_q, q_curr)
+        dcd_pr_q, dcd_ent_q, q90_q = compute_linear_gaussian_dcd_ground_truth(A_q, Sig_q)
+        stage_params[q_curr] = (A_q, d_raw, d_dens, dcd_pr_q, dcd_ent_q, q90_q)
+    
+    for t in range(n_steps - 1):
+        if t < t1:
+            q_curr = q1
+        elif t < t2:
+            q_curr = q2
+        else:
+            q_curr = q3
+            
+        A_curr, d_raw_curr, d_dens_curr, pr_curr, ent_curr, q90_curr = stage_params[q_curr]
+        true_dce_raw[t] = d_raw_curr
+        true_dce_density[t] = d_dens_curr
+        true_optimal_dim[t] = q_curr
+        true_dcd_pr[t] = pr_curr
+        true_dcd_entropy[t] = ent_curr
+        true_q90[t] = q90_curr
+            
+        c_size = p_dim // q_curr
+        micro_noise = rng.randn(p_dim) * (noise_level * 2.0)
+        for c in range(q_curr):
+            c_slice = slice(c * c_size, (c + 1) * c_size)
+            micro_noise[c_slice] -= np.mean(micro_noise[c_slice])
+        macro_noise = rng.randn(q_curr) * noise_level
+        for c in range(q_curr):
+            c_slice = slice(c * c_size, (c + 1) * c_size)
+            micro_noise[c_slice] += macro_noise[c]
+            
+        states[t + 1] = A_curr @ states[t] + micro_noise
+        
+    return SyntheticBenchmarkData(
+        states=states,
+        true_dce=true_dce_density,
+        true_optimal_dim=true_optimal_dim,
+        transition_timestamp=stages,
+        dgp_name="DGP-K_holdout_transition",
+        true_dce_raw=true_dce_raw,
+        true_dce_density=true_dce_density,
+        true_dcd_pr=true_dcd_pr,
+        true_dcd_entropy=true_dcd_entropy,
+        true_q90=true_q90
+    )
+
+
+# =============================================================================
 # Registry and Backward-Compatible Aliases
 # =============================================================================
 SYNTHETIC_DGP_REGISTRY = {
@@ -843,6 +954,7 @@ SYNTHETIC_DGP_REGISTRY = {
     "dgp_h": generate_dgp_h_kuramoto,
     "dgp_i": generate_dgp_i_chaotic_nonlinear,
     "dgp_j": generate_dgp_j_hierarchical_transition,
+    "dgp_k": generate_dgp_k_holdout_transition,
 }
 
 
