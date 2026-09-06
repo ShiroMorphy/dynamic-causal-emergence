@@ -160,13 +160,23 @@ def compute_gaussian_effective_information(
     )
 
 
+def gavish_donoho_lambda_star(beta: float) -> float:
+    """
+    Optimal hard threshold coefficient for singular values under known noise variance
+    (Gavish & Donoho, IEEE Trans. Inf. Theory 2014, eq. 11).
+    """
+    b = max(1e-6, min(1.0, float(beta)))
+    return float(np.sqrt(2.0 * (b + 1.0) + (8.0 * b) / (b + 1.0 + np.sqrt(b**2 + 14.0 * b + 1.0))))
+
+
 def compute_causal_spectrum(
     transition_matrix_A: np.ndarray,
     noise_covariance_Sigma: np.ndarray,
     regularization: float = 1e-8,
     zero_threshold: float = 1e-12,
     n_eff: Optional[float] = None,
-    denoising: Optional[str] = "marchenko_pastur"
+    min_eig_cov_x: Optional[float] = None,
+    denoising: Optional[str] = "gavish_donoho"
 ) -> CausalSpectrumReport:
     """
     Compute exact Causal Information Spectrum and Dynamic Causal Dimensionality (DCD).
@@ -181,8 +191,8 @@ def compute_causal_spectrum(
     Numerically stable via Cholesky factor L of Sigma and SVD of M = L^{-1} A,
     guaranteeing real non-negative eigenvalues, Fisher causal projection vectors V,
     and exact rotational invariance.
-    When n_eff is provided and denoising is enabled, applies Marchenko-Pastur bulk
-    thresholding to suppress finite-sample noise modes.
+    When n_eff is provided and denoising is enabled, applies Gavish & Donoho (2014)
+    optimal singular value thresholding calibrated to the directional noise floor.
     """
     A_arr = np.asarray(transition_matrix_A, dtype=np.float64)
     Sigma_arr = np.asarray(noise_covariance_Sigma, dtype=np.float64)
@@ -232,14 +242,18 @@ def compute_causal_spectrum(
         
     lambdas = np.maximum(s ** 2, 0.0)
     
-    # Finite-sample Marchenko-Pastur bulk denoising
+    # Finite-sample causal spectrum denoising
     if n_eff is not None and denoising is not None and n_eff > 0:
-        gamma = min(0.85, float(d) / float(n_eff))
-        lambda_cut = ((1.0 + np.sqrt(gamma)) / (1.0 - np.sqrt(gamma))) ** 2 - 1.0
-        if denoising in ("marchenko_pastur", "soft"):
-            lambdas = np.maximum(0.0, lambdas - lambda_cut)
-        elif denoising == "hard":
+        beta = min(0.99, float(d) / float(n_eff))
+        sig_x_min = max(float(min_eig_cov_x), 1e-4) if min_eig_cov_x is not None else 1.0
+        
+        if denoising in ("gavish_donoho", "hard", "optimal"):
+            lam_star = gavish_donoho_lambda_star(beta)
+            lambda_cut = (lam_star ** 2) * beta / sig_x_min
             lambdas = np.where(lambdas > lambda_cut, lambdas, 0.0)
+        elif denoising in ("marchenko_pastur", "soft"):
+            lambda_cut = ((1.0 + np.sqrt(beta)) ** 2) * beta / sig_x_min
+            lambdas = np.maximum(0.0, lambdas - lambda_cut)
     
     # Causal spectrum e_i = 0.5 * ln(1 + lambda_i)
     e_spectrum = 0.5 * np.log1p(lambdas)

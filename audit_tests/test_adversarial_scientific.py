@@ -173,3 +173,71 @@ def test_h1_surrogate_mean_critical_value():
     expected_crit = float(np.percentile(np.mean(surrogates, axis=1), 5.0))
     assert result.critical_value_mean == pytest.approx(expected_crit, rel=1e-10)
 
+
+def test_null_dgp_no_overcontraction():
+    """Null DGPs A, F, G must maintain DCD^PR >= 7.0 (no over-contraction under Gavish-Donoho thresholding)."""
+    from dce.datasets.synthetic import (
+        generate_dgp_a_null_stationary,
+        generate_dgp_f_heteroskedastic_shock,
+        generate_dgp_g_correlation_shock
+    )
+    from dce.estimators.linear_gaussian import LocalLinearGaussianDCE
+
+    for gen in (generate_dgp_a_null_stationary, generate_dgp_f_heteroskedastic_shock, generate_dgp_g_correlation_shock):
+        data = gen(n_steps=1000, seed=42)
+        est = LocalLinearGaussianDCE(bandwidth=50.0, ridge_alpha=0.01)
+        est.fit(data.states)
+        mean_pr = float(np.mean(est.dcd_pr_))
+        assert mean_pr >= 7.0, f"Null DGP DCD^PR collapsed to {mean_pr:.3f}, expected >= 7.0"
+
+
+def test_dgp_j_untouched_dynamic_scale_recovery():
+    """Untouched benchmark DGP-J (6 -> 3 -> 2) must be recovered with RMSE < 0.8 and accurate q90 tracking."""
+    from dce.datasets.synthetic import generate_dgp_j_hierarchical_transition
+    from dce.estimators.linear_gaussian import LocalLinearGaussianDCE
+
+    data = generate_dgp_j_hierarchical_transition(n_steps=1800, seed=42)
+    est = LocalLinearGaussianDCE(bandwidth=50.0, ridge_alpha=0.01)
+    est.fit(data.states)
+
+    rmse = float(np.sqrt(np.mean((est.dcd_pr_ - data.true_dcd_pr) ** 2)))
+    acc_q90 = float(np.mean(est.q90_ == data.true_q90))
+    assert rmse < 0.80, f"DGP-J RMSE must be < 0.80, got {rmse:.4f}"
+    assert acc_q90 >= 0.60, f"DGP-J q90 accuracy must be >= 60%, got {acc_q90*100:.1f}%"
+
+
+def test_observational_lifting_ground_truth_consistency():
+    """compute_linear_gaussian_dce_ground_truth must strictly match fit_oracle() under identical projection."""
+    from dce.datasets.synthetic import compute_linear_gaussian_dce_ground_truth
+    from dce.estimators.linear_gaussian import LocalLinearGaussianDCE
+    import scipy.linalg
+
+    rng = np.random.RandomState(42)
+    p, q = 6, 2
+    # Generate stable transition matrix
+    A = rng.randn(p, p) * 0.3
+    Sig = rng.randn(p, p)
+    Sigma = 0.2 * (Sig @ Sig.T) + 0.1 * np.eye(p)
+    Sigma_X = scipy.linalg.solve_discrete_lyapunov(A, Sigma)
+
+    W = np.zeros((p, q))
+    W[0:3, 0] = 1.0 / np.sqrt(3)
+    W[3:6, 1] = 1.0 / np.sqrt(3)
+
+    micro_ei, macro_ei, dce_raw, dce_dens = compute_linear_gaussian_dce_ground_truth(
+        A, Sigma, q, W=W, Sigma_X=Sigma_X
+    )
+
+    oracle = LocalLinearGaussianDCE(macro_dims=[q], ridge_alpha=1e-8)
+    oracle.fit_oracle(
+        A_sequence=A[np.newaxis, :, :],
+        Sigma_sequence=Sigma[np.newaxis, :, :],
+        state_cov_sequence=Sigma_X[np.newaxis, :, :],
+        projections={q: [W]}
+    )
+
+    assert micro_ei == pytest.approx(float(oracle.micro_ei_[0]), rel=1e-6)
+    assert macro_ei == pytest.approx(float(oracle.macro_ei_[q][0]), rel=1e-6)
+    assert dce_raw == pytest.approx(float(oracle.dce_raw_[q][0]), rel=1e-6)
+    assert dce_dens == pytest.approx(float(oracle.dce_density_[q][0]), rel=1e-6)
+

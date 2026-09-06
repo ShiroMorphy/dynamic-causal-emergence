@@ -26,7 +26,7 @@ def run_estimation_for_panel(
     spec: str = "core5",
     causal_only: bool = False,
     bandwidth: float = 48.0,
-    ridge_alpha: float = 1e-4,
+    ridge_alpha: float = 0.01,
     output_dir: str = "results/empirical",
     tag: str = "2021"
 ) -> pd.DataFrame:
@@ -142,6 +142,7 @@ def main():
     parser.add_argument("--period", default="2021", choices=["2021", "2022h2", "all"])
     parser.add_argument("--interconnection", default="all", choices=["all", "ERCOT", "Western", "Eastern"])
     parser.add_argument("--mode", default="both", choices=["both", "retrospective", "causal"])
+    parser.add_argument("--ridge-alpha", type=float, default=0.01, help="Regularization ridge parameter")
     parser.add_argument("--output_dir", default="results/empirical")
     args = parser.parse_args()
     
@@ -162,6 +163,7 @@ def main():
                     spec=spec,
                     causal_only=causal_flag,
                     bandwidth=48.0,
+                    ridge_alpha=args.ridge_alpha,
                     output_dir=args.output_dir,
                     tag=period
                 )

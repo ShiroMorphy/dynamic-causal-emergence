@@ -250,8 +250,17 @@ class LocalLinearGaussianDCE(BaseDynamicCE):
                 a_micro, sig_micro, intervention=self.intervention, regularization=self.ridge_alpha
             )
             self.micro_ei_[t] = micro_decomp.effective_information
+
+            # Directional noise floor conditioning via harmonic mean of local state covariance eigenvalues
+            cov_x_local = (x_past_eff * w_norm[:, None]).T @ x_past_eff + self.ridge_alpha * np.eye(p_dim)
+            try:
+                eigs_x = np.linalg.eigvalsh(cov_x_local)
+                h_mean_x = float(len(eigs_x) / np.sum(1.0 / np.maximum(eigs_x, 1e-6)))
+            except Exception:
+                h_mean_x = 1.0
+
             spec_rep = compute_causal_spectrum(
-                a_micro, sig_micro, regularization=self.ridge_alpha, n_eff=n_eff
+                a_micro, sig_micro, regularization=self.ridge_alpha, n_eff=n_eff, min_eig_cov_x=h_mean_x
             )
             self.dcd_pr_[t] = spec_rep.dcd_pr
             self.dcd_entropy_[t] = spec_rep.dcd_entropy

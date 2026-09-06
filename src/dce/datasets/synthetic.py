@@ -15,6 +15,7 @@ Canonical Data Generating Processes (DGPs) according to Q1 protocol:
 
 from typing import Any, Dict, List, NamedTuple, Optional, Tuple, Union
 import numpy as np
+import scipy.linalg
 
 from dce.core.effective_info import compute_gaussian_effective_information, compute_causal_spectrum
 
@@ -43,7 +44,7 @@ def compute_linear_gaussian_dcd_ground_truth(
     (dcd_pr, dcd_entropy, q90) from the continuous Causal Information Spectrum:
     e_i = 1/2 * ln(1 + lambda_i) where lambda_i are eigenvalues of Sigma^{-1} A A^T.
     """
-    rep = compute_causal_spectrum(A, Sigma)
+    rep = compute_causal_spectrum(A, Sigma, denoising=None)
     cum_e = np.cumsum(rep.spectrum) / max(rep.effective_information, 1e-12)
     q90 = int(np.searchsorted(cum_e, 0.90) + 1)
     return float(rep.dcd_pr), float(rep.dcd_entropy), int(q90)
@@ -53,14 +54,21 @@ def compute_linear_gaussian_dce_ground_truth(
     A: np.ndarray,
     Sigma: np.ndarray,
     q: int,
-    W: Optional[np.ndarray] = None
+    W: Optional[np.ndarray] = None,
+    Sigma_X: Optional[np.ndarray] = None,
+    regularization: float = 1e-8
 ) -> Tuple[float, float, float, float]:
     """
     Computes exact analytical micro EI, macro EI, DCE_raw, DCE_density
-    for a linear Gaussian transition mechanism (A, Sigma) under orthonormal projection W.
+    for a linear Gaussian transition mechanism (A, Sigma) under observational lifting.
+    
+    Observational lifting channel:
+        B = W^T A Sigma_X W (W^T Sigma_X W)^{-1}
+        Sigma_macro = W^T (A Sigma_{X|V} A^T + Sigma) W
+    consistent with Section 2.3 of the manuscript and fit_oracle().
     """
     p = A.shape[0]
-    micro_decomp = compute_gaussian_effective_information(A, Sigma)
+    micro_decomp = compute_gaussian_effective_information(A, Sigma, regularization=regularization)
     micro_ei = micro_decomp.effective_information
     
     if q >= p:
@@ -72,9 +80,26 @@ def compute_linear_gaussian_dce_ground_truth(
         for c in range(q):
             W[c * k : (c + 1) * k, c] = 1.0 / np.sqrt(k)
             
-    B = W.T @ A @ W
-    Sigma_macro = W.T @ Sigma @ W
-    macro_decomp = compute_gaussian_effective_information(B, Sigma_macro)
+    # Solve for stationary microstate covariance Sigma_X = A Sigma_X A^T + Sigma
+    if Sigma_X is None:
+        try:
+            Sigma_X = scipy.linalg.solve_discrete_lyapunov(A, Sigma)
+            Sigma_X = 0.5 * (Sigma_X + Sigma_X.T)
+        except Exception:
+            Sigma_X = np.eye(p, dtype=np.float64)
+            
+    cov_v = W.T @ Sigma_X @ W + regularization * np.eye(q)
+    cov_v_cross = W.T @ A @ Sigma_X @ W
+    try:
+        B = (np.linalg.solve(cov_v, cov_v_cross.T)).T
+    except np.linalg.LinAlgError:
+        B = W.T @ A @ W
+        
+    cov_v_next = W.T @ (A @ Sigma_X @ A.T + Sigma) @ W
+    Sigma_macro = cov_v_next - B @ cov_v @ B.T
+    Sigma_macro = 0.5 * (Sigma_macro + Sigma_macro.T) + regularization * np.eye(q)
+    
+    macro_decomp = compute_gaussian_effective_information(B, Sigma_macro, regularization=regularization)
     macro_ei = macro_decomp.effective_information
     
     dce_raw = macro_ei - micro_ei
@@ -712,6 +737,99 @@ def generate_dgp_i_chaotic_nonlinear(
 
 
 # =============================================================================
+# DGP-J: Untouched Dynamic Scale Transition (Hierarchical Branching)
+# =============================================================================
+def generate_dgp_j_hierarchical_transition(
+    n_steps: int = 2400,
+    stages: Tuple[int, int] = (800, 1600),
+    p_dim: int = 12,
+    q_stages: Tuple[int, int, int] = (6, 3, 2),
+    noise_level: float = 0.15,
+    seed: int = 42
+) -> SyntheticBenchmarkData:
+    """
+    DGP-J: Untouched Dynamic Scale Transition (Hierarchical Branching).
+    Demonstrates dynamic causal scale switching on an out-of-sample benchmark (p=12):
+    Stage 1 (t < 800): q^* = 6 (pairs of 2 micro-nodes)
+    Stage 2 (800 <= t < 1600): q^* = 3 (clusters of 4 micro-nodes)
+    Stage 3 (t >= 1600): q^* = 2 (clusters of 6 micro-nodes)
+    """
+    if stages is None or stages[1] >= n_steps:
+        stages = (n_steps // 3, 2 * n_steps // 3)
+
+    rng = np.random.RandomState(seed)
+    states = np.zeros((n_steps, p_dim), dtype=np.float64)
+    true_dce_raw = np.zeros(n_steps - 1, dtype=np.float64)
+    true_dce_density = np.zeros(n_steps - 1, dtype=np.float64)
+    true_optimal_dim = np.zeros(n_steps - 1, dtype=np.int32)
+    true_dcd_pr = np.zeros(n_steps - 1, dtype=np.float64)
+    true_dcd_entropy = np.zeros(n_steps - 1, dtype=np.float64)
+    true_q90 = np.zeros(n_steps - 1, dtype=np.int32)
+    
+    t1, t2 = stages
+    q1, q2, q3 = q_stages
+    states[0] = rng.randn(p_dim)
+    
+    stage_params = {}
+    for q_curr in (q1, q2, q3):
+        c_sz = p_dim // q_curr
+        A_q = np.zeros((p_dim, p_dim))
+        for c in range(q_curr):
+            tgt = (c + 1) % q_curr
+            A_q[tgt * c_sz : (tgt + 1) * c_sz, c * c_sz : (c + 1) * c_sz] = 0.85 / c_sz
+        sig_m = noise_level * 2.0
+        sig_M = noise_level
+        Sig_q = np.zeros((p_dim, p_dim))
+        for c in range(q_curr):
+            s = slice(c * c_sz, (c + 1) * c_sz)
+            Sig_q[s, s] = (sig_M ** 2) + (sig_m ** 2) * (np.eye(c_sz) - 1.0 / c_sz)
+        _, _, d_raw, d_dens = compute_linear_gaussian_dce_ground_truth(A_q, Sig_q, q_curr)
+        dcd_pr_q, dcd_ent_q, q90_q = compute_linear_gaussian_dcd_ground_truth(A_q, Sig_q)
+        stage_params[q_curr] = (A_q, d_raw, d_dens, dcd_pr_q, dcd_ent_q, q90_q)
+    
+    for t in range(n_steps - 1):
+        if t < t1:
+            q_curr = q1
+        elif t < t2:
+            q_curr = q2
+        else:
+            q_curr = q3
+            
+        A_curr, d_raw_curr, d_dens_curr, pr_curr, ent_curr, q90_curr = stage_params[q_curr]
+        true_dce_raw[t] = d_raw_curr
+        true_dce_density[t] = d_dens_curr
+        true_optimal_dim[t] = q_curr
+        true_dcd_pr[t] = pr_curr
+        true_dcd_entropy[t] = ent_curr
+        true_q90[t] = q90_curr
+            
+        c_size = p_dim // q_curr
+        micro_noise = rng.randn(p_dim) * (noise_level * 2.0)
+        for c in range(q_curr):
+            c_slice = slice(c * c_size, (c + 1) * c_size)
+            micro_noise[c_slice] -= np.mean(micro_noise[c_slice])
+        macro_noise = rng.randn(q_curr) * noise_level
+        for c in range(q_curr):
+            c_slice = slice(c * c_size, (c + 1) * c_size)
+            micro_noise[c_slice] += macro_noise[c]
+            
+        states[t + 1] = A_curr @ states[t] + micro_noise
+        
+    return SyntheticBenchmarkData(
+        states=states,
+        true_dce=true_dce_density,
+        true_optimal_dim=true_optimal_dim,
+        transition_timestamp=stages,
+        dgp_name="DGP-J_hierarchical_transition",
+        true_dce_raw=true_dce_raw,
+        true_dce_density=true_dce_density,
+        true_dcd_pr=true_dcd_pr,
+        true_dcd_entropy=true_dcd_entropy,
+        true_q90=true_q90
+    )
+
+
+# =============================================================================
 # Registry and Backward-Compatible Aliases
 # =============================================================================
 SYNTHETIC_DGP_REGISTRY = {
@@ -724,6 +842,7 @@ SYNTHETIC_DGP_REGISTRY = {
     "dgp_g": generate_dgp_g_correlation_shock,
     "dgp_h": generate_dgp_h_kuramoto,
     "dgp_i": generate_dgp_i_chaotic_nonlinear,
+    "dgp_j": generate_dgp_j_hierarchical_transition,
 }
 
 

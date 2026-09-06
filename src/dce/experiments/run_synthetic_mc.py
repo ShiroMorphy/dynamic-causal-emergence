@@ -40,7 +40,7 @@ def run_mc_replication(
     threshold: float = 0.05
 ) -> Dict[str, Any]:
     macro_dims = macro_dims or [1, 2, 4, 8]
-    actual_steps = max(n_steps, 1200) if str(dgp_name).lower().replace("-", "_") in ("dgp_e", "e") else n_steps
+    actual_steps = max(n_steps, 1200) if str(dgp_name).lower().replace("-", "_") in ("dgp_e", "e", "dgp_j", "j") else n_steps
     data = get_synthetic_benchmark(dgp_name, n_steps=actual_steps, seed=seed)
     
     # Instantiate estimator

@@ -42,7 +42,7 @@ def _fit_single_surrogate(X_in: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         macro_dims=[2],
         bandwidth=48.0,
         causal_only=False,
-        ridge_alpha=1e-4,
+        ridge_alpha=0.01,
         selection_criterion="density"
     )
     m.fit(X_in)
@@ -71,7 +71,7 @@ def execute_h1_test(output_dir: str = "results/empirical", n_surrogates: int = 1
             macro_dims=[2],
             bandwidth=48.0,
             causal_only=False,
-            ridge_alpha=1e-4,
+            ridge_alpha=0.01,
             selection_criterion="density"
         )
         m_emp.fit(X)
