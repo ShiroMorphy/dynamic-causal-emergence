@@ -20,6 +20,7 @@ import logging
 import os
 import subprocess
 import sys
+import shutil
 from pathlib import Path
 
 import pandas as pd
@@ -210,7 +211,6 @@ def compile_manuscript() -> bool:
 
     pdf_path = paper_dir / "main.pdf"
     if pdf_path.exists():
-        import shutil
         sub_pdf = ROOT_DIR / "paper_dce_submitted.pdf"
         shutil.copy2(pdf_path, sub_pdf)
         logger.info(f"Manuscript compiled successfully: {pdf_path} ({pdf_path.stat().st_size:,} bytes)")
