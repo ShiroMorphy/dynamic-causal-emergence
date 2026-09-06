@@ -158,12 +158,15 @@ def ensure_hypotheses_testing(from_scratch: bool = False) -> bool:
     logger.info(f"Running hypothesis testing pipeline H1-H4 with B=1000 surrogates (missing: {[j.name for j in missing]})...")
     env = os.environ.copy()
     env["PYTHONPATH"] = str(ROOT_DIR / "src")
-    res = subprocess.run([
+    cmd = [
         sys.executable,
         str(ROOT_DIR / "src" / "dce" / "experiments" / "run_hypotheses_testing.py"),
         "--test", "all",
         "--n-surrogates", "1000"
-    ], env=env)
+    ]
+    if from_scratch:
+        cmd.append("--from-scratch")
+    res = subprocess.run(cmd, env=env)
     if res.returncode != 0:
         return False
     _verify_scientific_assertions()

@@ -52,7 +52,7 @@ Complex dynamical networks---from neural circuits and cellular metabolisms to co
     \label{fig:fig1_framework}
 \end{figure*}
 
-Despite fundamental theoretical insights, existing formulations suffer from a critical limitation: \textit{all established CE estimators implicitly presume a stationary transition mechanism $P(X_{t+1} \mid X_t)$}. In nonstationary environments, stationary estimators average over fundamentally distinct operational regimes:
+Despite fundamental theoretical insights, existing formulations face key structural constraints: \textit{existing causal emergence frameworks do not provide a unified estimator of continuously evolving causal dimensionality under explicitly nonstationary transition mechanisms, together with retrospective and one-sided online inference}~\cite{dahlhaus1997fitting,yang2025finding,liu2025singular}. In nonstationary environments, static or stationary estimators average over fundamentally distinct operational regimes:
 \begin{itemize}
     \item \textbf{Renewable Energy Ingestion}: Power grids undergo rapid, weather-driven swings in synchronous inertia and physical topology as inverter-based wind and solar resources displace thermal generators~\cite{eia2024eia930,machowski2020power}.
     \item \textbf{Extreme Weather and Infrastructure Shocks}: Catastrophic climate events (e.g., severe winter freezes, heatwaves) induce structural regime shifts, cascading line trips, and emergency load-shedding~\cite{menck2014dead,witthaut2016patterns}.
@@ -63,9 +63,9 @@ To address these challenges, this paper develops \textbf{Dynamic Causal Dimensio
 \begin{enumerate}
     \item Continuous causal spectrum decomposition $e_{i,t} = \frac{1}{2}\ln(1 + \lambda_{i,t})$ resolving the active macroscopic dimensionality via Causal Participation Ratio ($DCD_t^{\text{PR}}$) and Causal Effective Rank ($DCD_t^{\text{entropy}}$), circumventing running-average degeneracy.
     \item Exact interventional semantics via the observational lifting kernel $\kappa_W(dx \mid v)$, proving that projected regressions recover true Markov macro-dynamics.
-    \item Primary analytical estimation via \textbf{Local Affine-Gaussian DCE}, complemented by an online neural variational estimator (\textbf{Dyn-NIS+}) for non-linear manifolds.
-    \item Clarification of linear causal emergence limits, contrasting scale-free Gaussian mutual information against bounded-domain volume formulations (Liu et al. 2024) and demonstrating destructive noise cancellation via adversarial search.
-    \item Rigorous Monte Carlo benchmarking across synthetic nonstationary DGPs (A--I; $R=100$) and empirical application to continental U.S. power grids (EIA-930; 367,920 BA-hours) evaluating hypotheses H1--H4 with $B=1000$ refitted surrogates and direction-aware testing.
+    \item Primary analytical estimation via \textbf{Local Linear-Gaussian DCE} with exact Fisher causal projection and random-matrix spectral shrinkage~\cite{gavish2014optimal,ledoit2004well}, establishing a rigorous baseline for future neural variational extensions.
+    \item Clarification of linear causal emergence limits, contrasting scale-free Gaussian mutual information against bounded-domain volume formulations (Liu et al. 2024~\cite{liu2024exact,liu2025singular}) and demonstrating destructive noise cancellation via adversarial search.
+    \item Rigorous Monte Carlo benchmarking across synthetic nonstationary DGPs (A--J; $R=100$) and empirical application to continental U.S. power grids (EIA-930; 367,920 BA-hours) evaluating hypotheses H1--H4 with $B=1000$ refitted surrogates and direction-aware testing.
 \end{enumerate}
 
 \section{Mathematical Formulation}

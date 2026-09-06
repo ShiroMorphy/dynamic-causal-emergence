@@ -49,7 +49,7 @@ def _fit_single_surrogate(X_in: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     return m.dcd_pr_, m.optimal_dce_density_
 
 
-def execute_h1_test(output_dir: str = "results/empirical", n_surrogates: int = 1000) -> dict:
+def execute_h1_test(output_dir: str = "results/empirical", n_surrogates: int = 1000, from_scratch: bool = False) -> dict:
     """Execute H1 surrogate test across ERCOT, Western, and Eastern with model refitting on every surrogate."""
     print("\n=======================================================")
     print(f"Executing H1: Surrogate Testing on DCD & CCG across Continental Interconnections (n={n_surrogates} IAAFT refits)")
@@ -80,7 +80,7 @@ def execute_h1_test(output_dir: str = "results/empirical", n_surrogates: int = 1
         print(f"[{inter}] Empirical fit completed in {time.time() - t0:.2f}s: Mean DCD_PR = {np.mean(empirical_dcd):.4f}, Mean CCG = {np.mean(empirical_ccg):.4f}")
         
         cache_path = os.path.join(output_dir, f".cache_h1_{inter.lower()}_{n_surrogates}.npz")
-        if os.path.exists(cache_path):
+        if os.path.exists(cache_path) and not from_scratch:
             print(f"[{inter}] Loading cached surrogate ensembles from {cache_path}...")
             cached = np.load(cache_path)
             surr_dcd_ensemble = cached["dcd"]
@@ -606,13 +606,14 @@ def main():
     parser = argparse.ArgumentParser(description="Empirical Hypothesis Testing Pipeline (H1 to H4).")
     parser.add_argument("--test", default="all", choices=["all", "h1", "h2", "h3", "h4"], help="Which hypothesis test to execute")
     parser.add_argument("--n-surrogates", type=int, default=1000, help="Number of surrogate refits for H1")
+    parser.add_argument("--from-scratch", action="store_true", help="Force recomputation of surrogate ensembles without loading cache")
     parser.add_argument("--output-dir", default="results/empirical", help="Directory for output JSON artifacts")
     args = parser.parse_args()
     
     os.makedirs(args.output_dir, exist_ok=True)
     
     if args.test in ("all", "h1"):
-        execute_h1_test(output_dir=args.output_dir, n_surrogates=args.n_surrogates)
+        execute_h1_test(output_dir=args.output_dir, n_surrogates=args.n_surrogates, from_scratch=args.from_scratch)
     if args.test in ("all", "h2"):
         execute_h2_test(output_dir=args.output_dir)
     if args.test in ("all", "h3"):
