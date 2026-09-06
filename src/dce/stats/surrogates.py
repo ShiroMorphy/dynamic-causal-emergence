@@ -7,7 +7,8 @@ Implements:
 3. Block Bootstrap for Nonstationary Time Series.
 """
 
-from typing import List, Optional
+import os
+from typing import List, Optional, Tuple
 import numpy as np
 
 
@@ -136,6 +137,15 @@ def generate_multivariate_iaaft_surrogate(
     return s_final
 
 
+def _evaluate_surrogate_candidate(args: Tuple[np.ndarray, int]) -> Tuple[int, Optional[np.ndarray], bool]:
+    """Worker function to generate and validate a single candidate surrogate realization."""
+    X, surr_seed = args
+    from dce.stats.surrogate_validation import evaluate_surrogate_quality
+    surr = generate_multivariate_iaaft_surrogate(X, seed=surr_seed)
+    report = evaluate_surrogate_quality(X, surr)
+    return surr_seed, (surr if report.accepted else None), report.accepted
+
+
 def generate_accepted_multivariate_surrogates(
     X: np.ndarray,
     n_surrogates: int = 1000,
@@ -145,20 +155,40 @@ def generate_accepted_multivariate_surrogates(
     """
     Generate an ensemble of multivariate IAAFT surrogates where EVERY realization
     is strictly validated and accepted according to the frozen three-tier quality contract.
+    Accelerated with multi-core batch processing while maintaining 100% deterministic candidate evaluation order.
     """
+    from concurrent.futures import ProcessPoolExecutor
     from dce.stats.surrogate_validation import evaluate_surrogate_quality
     
     accepted_surrogates: List[np.ndarray] = []
-    attempt = 0
     max_attempts = n_surrogates * max_attempts_factor
+    workers = min(32, max(1, (os.cpu_count() or 4) - 1))
     
-    while len(accepted_surrogates) < n_surrogates and attempt < max_attempts:
-        surr_seed = seed + attempt * 1000 + 7
-        surr = generate_multivariate_iaaft_surrogate(X, seed=surr_seed)
-        report = evaluate_surrogate_quality(X, surr)
-        if report.accepted:
-            accepted_surrogates.append(surr)
-        attempt += 1
+    if workers <= 1 or n_surrogates <= 5:
+        # Sequential path for small sizes or single-core
+        attempt = 0
+        while len(accepted_surrogates) < n_surrogates and attempt < max_attempts:
+            surr_seed = seed + attempt * 1000 + 7
+            surr = generate_multivariate_iaaft_surrogate(X, seed=surr_seed)
+            report = evaluate_surrogate_quality(X, surr)
+            if report.accepted:
+                accepted_surrogates.append(surr)
+            attempt += 1
+    else:
+        # Parallel batched evaluation: evaluates in strictly ordered seed batches
+        attempt = 0
+        batch_size = workers * 2
+        with ProcessPoolExecutor(max_workers=workers) as executor:
+            while len(accepted_surrogates) < n_surrogates and attempt < max_attempts:
+                current_batch_size = min(batch_size, max_attempts - attempt)
+                candidate_args = [(X, seed + (attempt + i) * 1000 + 7) for i in range(current_batch_size)]
+                results = list(executor.map(_evaluate_surrogate_candidate, candidate_args))
+                # Sort by seed to preserve strictly sequential candidate evaluation order
+                results.sort(key=lambda r: r[0])
+                for _, surr, ok in results:
+                    if ok and len(accepted_surrogates) < n_surrogates:
+                        accepted_surrogates.append(surr)
+                attempt += current_batch_size
         
     if len(accepted_surrogates) < n_surrogates:
         print(f"Warning: Only {len(accepted_surrogates)}/{n_surrogates} passed strict acceptance within {max_attempts} attempts.")

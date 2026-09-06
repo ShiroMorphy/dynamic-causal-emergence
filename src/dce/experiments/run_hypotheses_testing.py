@@ -9,6 +9,13 @@ Executes Milestones M7 & M8:
 """
 
 import os
+# Strictly disable OpenMP/BLAS internal multithreading to prevent 1000+ thread thrashing across multiprocessing workers
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
+
 import json
 import time
 import numpy as np
@@ -82,8 +89,9 @@ def execute_h1_test(output_dir: str = "results/empirical", n_surrogates: int = 1
         workers = min(n_surrogates, max(1, (os.cpu_count() or 4) - 1))
         t_refit = time.time()
         try:
+            chunk = max(1, n_surrogates // (workers * 4))
             with ProcessPoolExecutor(max_workers=workers) as executor:
-                surr_results = list(executor.map(_fit_single_surrogate, surrogates))
+                surr_results = list(executor.map(_fit_single_surrogate, surrogates, chunksize=chunk))
         except Exception as e:
             print(f"ProcessPoolExecutor fallback ({e}), using ThreadPoolExecutor...")
             with ThreadPoolExecutor(max_workers=workers) as executor:
