@@ -155,8 +155,8 @@ def execute_h1_test(output_dir: str = "results/empirical", n_surrogates: int = 1
                 "significant_ratio_fdr": h1_res_ccg.significant_ratio_fdr,
                 "empirical_sample": empirical_ccg[:100].tolist(),
                 "critical_envelope_sample": (h1_res_ccg.critical_envelope[:100].tolist() if h1_res_ccg.critical_envelope is not None else []),
-                "surrogate_95th_sample": h1_res_ccg.surrogate_dce_95th[:100].tolist()
             }
+        }
         print(f"[{inter}] DCD_PR Mean={h1_res_dcd.mean_stat_empirical:.3f} (p={h1_res_dcd.mean_stat_pvalue:.4f}, extreme p={h1_res_dcd.extreme_stat_pvalue:.4f}) | CCG Mean={h1_res_ccg.mean_stat_empirical:.3f} (p={h1_res_ccg.mean_stat_pvalue:.4f})")
         # Save individual grid checkpoint
         with open(os.path.join(output_dir, f"h1_{inter.lower()}_results.json"), "w") as f_chk:
