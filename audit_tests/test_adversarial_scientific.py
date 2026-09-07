@@ -355,3 +355,52 @@ def test_positive_raw_emergence_under_fisher_projection():
     assert dce_raw > 0.0, "dce_raw must be strictly positive in this counterexample"
 
 
+
+
+def test_reproduce_all_synthetic_bandwidth_matches_published_artifacts():
+    """
+    The master replication script must regenerate the synthetic benchmarks at the SAME
+    bandwidth that produced the committed artifacts behind Table 1.
+
+    Historical failure: reproduce_all.py invoked run_synthetic_mc.py with --bandwidth 36.0
+    while every results/synthetic/dgp_*.json was generated at h=24 (and the manuscript
+    reports those benchmarks as h=24, N_eff ~ 85). A --from-scratch reproduction therefore
+    silently overwrote the published Table 1 with materially different numbers
+    (DGP-A mean_rmse_dcd_pr 2.464 -> 1.227, bias -2.306 -> -0.980), so the documented
+    one-command replication contradicted the paper it was meant to certify.
+
+    The h=36 information budget belongs to the Table 2 baseline comparison and DGP-K,
+    which are produced by scripts/generate_baseline_comparison.py, not by this stage.
+    """
+    import json
+    import re
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+
+    script_text = (root / "scripts" / "reproduce_all.py").read_text(encoding="utf-8")
+    block = script_text.split("run_synthetic_mc.py")[1]
+    match = re.search(r'"--bandwidth",\s*"([0-9.]+)"', block)
+    assert match is not None, "reproduce_all.py must pass an explicit --bandwidth to run_synthetic_mc.py"
+    script_bandwidth = float(match.group(1))
+
+    artifact_bandwidths = set()
+    for artifact in sorted((root / "results" / "synthetic").glob("dgp_*_linear_gaussian.json")):
+        summary = json.loads(artifact.read_text(encoding="utf-8")).get("summary", {})
+        if summary.get("bandwidth") is not None:
+            artifact_bandwidths.add(float(summary["bandwidth"]))
+
+    if not artifact_bandwidths:
+        return  # artifacts purged for a clean run; nothing to compare against
+
+    assert len(artifact_bandwidths) == 1, (
+        f"Published synthetic artifacts disagree on bandwidth: {sorted(artifact_bandwidths)}. "
+        "Table 1 must rest on a single information budget."
+    )
+    artifact_bandwidth = artifact_bandwidths.pop()
+
+    assert script_bandwidth == artifact_bandwidth, (
+        f"reproduce_all.py regenerates the synthetic benchmarks at h={script_bandwidth}, "
+        f"but the committed Table 1 artifacts were produced at h={artifact_bandwidth}. "
+        "A from-scratch reproduction would contradict the published manuscript."
+    )

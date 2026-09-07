@@ -310,6 +310,39 @@ On the remote GPU cluster (`uni`):
 ssh uni "cd ~/dynamic_causal_emergence && git checkout v1.0.1-q1-submission-freeze && PYTHONPATH=src /home/glaurung/miniconda3/envs/torch-gpu/bin/pytest -q tests/ audit_tests/"
 ```
 
+### 6.1b Bandwidth Budgets: h=24 and h=36 Are Both Correct, In Different Places
+
+The project deliberately uses **two** information budgets, and confusing them silently
+corrupts Table 1:
+
+| Artifact | Bandwidth | Produced by |
+| :--- | :--- | :--- |
+| `results/synthetic/dgp_*_linear_gaussian.json` (Table 1, Figure 2) | **h = 24** ($N_{\text{eff}} \approx 85$) | `run_synthetic_mc.py --bandwidth 24.0` via `reproduce_all.py` |
+| `results/synthetic/baseline_comparison_results.json` (Table 2, DGP-K) | **h = 36** ($N_{\text{eff}} \approx 128$, matched to $w_{\text{len}}=128$) | `scripts/generate_baseline_comparison.py` |
+
+The manuscript states both: Section 3 reports the benchmarks at $h=24$ (and the DGP-D bias
+of $-2.113$ under $h=24$), while Table 2 equalizes the budget at $h=36$ to compare fairly
+against sliding windows of length 128.
+
+**Defect found and fixed on 2026-09-07.** `reproduce_all.py` was invoking the synthetic stage
+with `--bandwidth 36.0`. Every committed Table 1 artifact was generated at $h=24$, so running
+the project's own documented one-command replication silently overwrote Table 1 with numbers
+that contradict the published paper. Measured on a clean from-scratch run at $h=36$, same
+seeds (base seed 1000, $R=100$):
+
+| DGP | `mean_rmse_dcd_pr` at h=24 (published) | at h=36 (what the script produced) |
+| :--- | :--- | :--- |
+| A | 2.464 (bias $-2.306$) | 1.227 (bias $-0.980$) |
+| B | 5.096 | 4.208 |
+| C | 0.739 | 0.877 |
+| D | 2.219 | 1.923 |
+
+A referee following `reproduce_all.py --from-scratch` would have obtained a different Table 1
+and reasonably concluded the results did not replicate. The script now passes `--bandwidth 24.0`,
+and `audit_tests/test_adversarial_scientific.py::test_reproduce_all_synthetic_bandwidth_matches_published_artifacts`
+fails if the two ever diverge again. **Never "fix" a future mismatch by editing the artifacts to
+match the script; regenerate deliberately and update the manuscript with the new budget stated.**
+
 ### 6.2 End-to-End Master Pipeline
 To reproduce data validation, figure generation, and PDF compilation:
 ```bash
@@ -341,6 +374,12 @@ If you are an AI assistant tasked with modifying or extending this codebase, **y
    Use the new release tag `v1.0.1-q1-submission-freeze`. Do not use `--force` on existing tags.
 6. **NEVER Hardcode Figures or Tables:**
    All figures must be regenerated dynamically from parquet/JSON artifacts via `scripts/generate_all_paper_figures.py`.
+7. **NEVER Let the Replication Script Drift From the Published Artifacts:**
+   `reproduce_all.py` must regenerate each artifact under the exact configuration that produced
+   the committed version (see Section 6.1b for the h=24 vs h=36 split). Before trusting any
+   "reproduction succeeded" message, diff the regenerated summaries against the committed ones
+   field by field, including `bandwidth`, `n_reps` and `threshold`. A green pipeline that emits
+   different numbers than the paper is a failed reproduction, not a successful one.
 
 ---
 
