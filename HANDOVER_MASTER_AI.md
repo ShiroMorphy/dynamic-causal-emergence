@@ -6,7 +6,15 @@
 **Current Git Release Tag:** `v1.0.1-q1-submission-freeze`  
 **Current Freeze Commit:** `d008285`  
 **Date of Handover:** September 7, 2026  
-**Status:** **CERTIFIED READY FOR Q1 SUBMISSION (100% AUDITED, 86/86 TESTS PASSING, STRICT 12-PAGE BUDGET)**  
+**Status:** **86/86 TESTS PASSING, STRICT 12-PAGE BUDGET, ALL 11 LOGGED BLOCKERS RESOLVED**
+
+> **Read this before trusting the word "certified" anywhere in this file.** Earlier revisions of this
+> handover declared the project certified and closed. The project's own governing principle (Section 7
+> and the audit history) is that such declarations have repeatedly preceded the discovery of deeper
+> errors. Treat "all blockers resolved" as "all *known* blockers resolved". A verification pass on
+> 2026-09-07 confirmed 86/86 tests, a 12-page PDF and manuscript-to-artifact numerical agreement for
+> H1--H4, and still found two defects in this very document (a wrong lifting convention in Section 2.3
+> and an overstated surrogate-sensitivity claim in Section 4.2), both now corrected.  
 
 ---
 
@@ -42,17 +50,40 @@ $$X_{t+1} \mid do(X_t = x) \sim \mathcal{N}(A_t x, \Sigma_t)$$
 The marginal output distribution under intervention is $X_{t+1} \sim \mathcal{N}(0, A_t A_t^\top + \Sigma_t)$. Effective Information is the mutual information between the intervened input and output:
 $$EI(X_t) = I(do(X_t); X_{t+1}) = H(X_{t+1}) - H(X_{t+1} \mid do(X_t)) = \frac{1}{2} \ln \det(I_p + \Sigma_t^{-1} A_t A_t^\top)$$
 
-### 2.3 Linear Coarse-Graining and Canonical Observational Lifting
+### 2.3 Linear Coarse-Graining and the Observational Lifting Kernel
+
+> **CRITICAL FOR ANY INCOMING AGENT.** The macro channel is induced by the **observational
+> lifting kernel**, *not* by the naive right-inverse (Dirac) lifting. This distinction is not
+> cosmetic: it is the difference between the flagship counterexample of Section 2.5 holding
+> or collapsing. An earlier revision of this handover mistakenly documented the Dirac
+> convention; that statement was wrong and has been corrected here. `paper/main.tex`
+> (Eq. lifting_kernel) and `src/dce/` have always implemented the observational convention.
+
 A macroscopic state $V_t \in \mathbb{R}^q$ ($q < p$) is defined by a semi-orthogonal projection matrix $W_t \in \mathbb{R}^{p \times q}$ ($W_t^\top W_t = I_q$):
 $$V_t = W_t^\top X_t$$
-To define macro interventions $do(V_t = v)$, the macro intervention is lifted to the microstate space via the canonical right-inverse lifting kernel:
-$$\kappa_{W_t}(dx \mid v) = \delta(x - W_t v) dx$$
-Under this lifting, macroscopic forward dynamics are:
-$$V_{t+1} = W_t^\top A_t W_t v + W_t^\top \epsilon_t = A_{V,t} v + \epsilon_{V,t}$$
-where $A_{V,t} = W_t^\top A_t W_t$ and $\Sigma_{V,t} = W_t^\top \Sigma_t W_t$.
+An atomic macro intervention $do(V_t = v)$ does **not** uniquely determine $X_t$. The convention adopted throughout the paper and code is the **observational lifting kernel**, i.e. the conditional law of the microstate given the macrostate under the background operational distribution:
+$$\kappa_{W_t}(dx \mid v) \triangleq P_{\text{obs}}\bigl(X_t \in dx \mid W_t^\top X_t = v\bigr)$$
+Under joint Gaussianity with observational (stationary) covariance $\Sigma_{X,t}$ solving the discrete Lyapunov equation $\Sigma_X = A \Sigma_X A^\top + \Sigma$, this kernel is Gaussian and induces the macro channel
+$$V_{t+1} = B_t v + \eta_t, \qquad \eta_t \sim \mathcal{N}(0, \Sigma_{\eta,t})$$
+with
+$$B_t = W_t^\top A_t \Sigma_{X,t} W_t \bigl(W_t^\top \Sigma_{X,t} W_t\bigr)^{-1}$$
+$$\Sigma_{X \mid V, t} = \Sigma_{X,t} - \Sigma_{X,t} W_t \bigl(W_t^\top \Sigma_{X,t} W_t\bigr)^{-1} W_t^\top \Sigma_{X,t}$$
+$$\Sigma_{\eta,t} = W_t^\top \bigl(A_t \Sigma_{X \mid V, t} A_t^\top + \Sigma_t\bigr) W_t$$
 
 Under the standardized macro interventional drive $do(V_t) \sim \mathcal{N}(0, I_q)$, macro Effective Information is:
-$$EI(V_t) = \frac{1}{2} \ln \det(I_q + \Sigma_{V,t}^{-1} A_{V,t} A_{V,t}^\top)$$
+$$EI(V_t) = \frac{1}{2} \ln \det\bigl(I_q + \Sigma_{\eta,t}^{-1} B_t B_t^\top\bigr)$$
+
+This is an *observationally compatible lifting convention*, not the unique or canonical causal
+abstraction, and the manuscript must keep wording it that way.
+
+**Why the Dirac lifting must never be substituted.** Under $\kappa_W(dx\mid v) = \delta(x - W_t v)dx$
+one would instead get $A_{V,t} = W_t^\top A_t W_t$ and $\Sigma_{V,t} = W_t^\top \Sigma_t W_t$. On the very
+system of Section 2.5 this yields $A_V = 0.27770$, $\Sigma_V = 0.28095$, hence
+$EI(V) = 0.12127 < EI(X) = 0.22519$, i.e. $\Delta EI^{\text{raw}} = -0.10392 < 0$. The positive raw
+emergence result of Section 2.5 is therefore a statement **about the observational lifting only**.
+Documenting the Dirac convention while quoting the observational counterexample would leave the
+project asserting a result its own stated semantics contradict, which is precisely the class of
+error the adversarial audits exist to catch.
 
 ### 2.4 Causal Concentration Gain ($CCG_t$) vs. Raw Emergence ($\Delta EI_t^{\text{raw}}$)
 - **Raw Causal Emergence:** $\Delta EI_t^{\text{raw}} = EI(V_t) - EI(X_t)$ (absolute bits/nats gained).
@@ -163,9 +194,15 @@ An incoming AI agent must know the exact history of adversarial findings and how
 - **ERCOT** ($p=9, T=8760$): Empirical mean $DCD^{\text{PR}} = 4.791 < c_{0.05} = 5.077$ ($\hat{p} < 0.001$), mean $CCG(q=2) = 0.739 > c_{0.95} = 0.681$ ($\hat{p} < 0.001$).
 - **Western** ($p=45, T=8761$): Empirical mean $DCD^{\text{PR}} = 3.569 < c_{0.05} = 4.335$ ($\hat{p} < 0.001$, $31.2\%$ FDR significance ratio).
 - **Eastern** ($p=55, T=8761$): Empirical mean $DCD^{\text{PR}} = 0.626$ ($p = 0.9970$), showing spatial aggregation limits.
-- **Surrogate Sensitivity ($\tau \in [0.08, 0.15]$):** Re-evaluated with independent candidate ensembles:
-  - ERCOT: $p = 0.0099$, min surrogate mean $4.993 > 4.791$ across all realizations.
-  - Western: $p = 0.0099$, min surrogate mean $4.221 > 3.569$ across all realizations.
+- **Surrogate Sensitivity ($\tau \in \{0.08, 0.10, 0.12, 0.15\}$):** Re-evaluated with genuinely
+  independent per-tolerance ensembles (not filtered from a single pool), **$B=100$ accepted
+  surrogates at each tolerance**, acceptance yields $16\%$--$61\%$:
+  - ERCOT: $p = 1/101 = 0.0099$ at every tolerance, min surrogate mean $4.993 > 4.791$ across all realizations.
+  - Western: $p = 1/101 = 0.0099$ at every tolerance, min surrogate mean $4.221 > 3.569$ across all realizations.
+  - **Do not describe these as $p < 0.01$ without stating $B=100$.** $0.0099$ is the add-one floor
+    at $B=100$, not a measurement of a smaller tail; the headline H1 test is the separate $B=1000$
+    ensemble. Conflating the two overstates the sensitivity evidence. Source of truth:
+    `results/empirical/h1_surrogate_sensitivity_results.json`.
 - **2022H2 Temporal Hold-out ($B=100$):**
   - ERCOT ($T=4423$): $DCD^{\text{PR}} = 4.733 < c_{0.05} = 5.021$ ($p = 0.0099$).
   - Western ($T=4425$): $DCD^{\text{PR}} = 3.178 < c_{0.05} = 4.095$ ($p = 0.0099$).
@@ -255,7 +292,18 @@ To run all 86 unit, integration, and adversarial tests:
 ```bash
 PYTHONPATH=src pytest -q tests/ audit_tests/
 ```
-Expected output: `86 passed in ~15s` (0 failures, 0 errors, 0 warnings).
+Expected output: `86 passed` (0 failures, 0 errors). Wall time is a few minutes, not seconds:
+`audit_tests/` alone spends ~22 s each in `test_dgpe_finite_sample_recovery` and
+`test_dgp_j_untouched_dynamic_scale_recovery`. Any earlier claim of "~15 s" was wrong.
+
+Required third-party packages beyond the obvious ones: `pyarrow` (parquet engine, without it the
+EIA-930 and continental-surrogate tests fail on import, not on science) and a `torch` build matching
+the installed NumPy ABI (a NumPy 2.x runtime against a NumPy 1.x-compiled torch raises
+`RuntimeError: Numpy is not available` in the Dyn-NIS+ tests). Both are environment faults; do not
+"fix" them by weakening the tests.
+
+Verified independently on 2026-09-07 by re-running the suite in chunks from a clean dependency
+install: 86/86 passing, no assertion failures.
 
 On the remote GPU cluster (`uni`):
 ```bash
