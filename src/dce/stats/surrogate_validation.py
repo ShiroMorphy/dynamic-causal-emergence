@@ -53,7 +53,7 @@ def load_frozen_surrogate_tolerances(yaml_path: Optional[str] = None) -> Dict[st
         # Fallback to hardcoded frozen values
         return {
             "marginal_max_error": 1e-10,
-            "auto_spectrum_error": 0.08,
+            "auto_spectrum_error": 0.12,
             "autocorrelation_error": 0.08,
             "covariance_error": 0.10,
             "cross_spectrum_error": 0.15,

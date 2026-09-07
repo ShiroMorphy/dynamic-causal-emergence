@@ -32,7 +32,7 @@ def generate_figure_2_synthetic(output_path: str = "paper/figures/fig2_synthetic
     """Generate Figure 2 directly from Monte Carlo results and analytical benchmark."""
     apply_nature_style()
     fig = plt.figure(figsize=(7.2, 4.8))
-    gs = gridspec.GridSpec(2, 2, figure=fig, hspace=0.35, wspace=0.28)
+    gs = gridspec.GridSpec(2, 2, figure=fig, hspace=0.35, wspace=0.35)
     
     # 1. Load MC consolidated summary
     mc_path = "results/synthetic/mc_benchmark_consolidated_linear_gaussian.json"
@@ -50,7 +50,7 @@ def generate_figure_2_synthetic(output_path: str = "paper/figures/fig2_synthetic
     ax1.plot(t_eval_e, model_e.dcd_pr_, color=COLORS["accent_purple"], lw=1.4, label=r"Estimated $DCD_t^{\text{PR}}$")
     ax1.axvline(400, color=COLORS["accent_orange"], ls=":", lw=1.2, label=r"Transitions $\tau_1, \tau_2$")
     ax1.axvline(800, color=COLORS["accent_orange"], ls=":", lw=1.2)
-    ax1.set_title(r"a | Dynamic Causal Dimensionality Tracking (DGP-E)", fontweight="bold", loc="left")
+    ax1.set_title(r"a | Dynamic Causal Dimensionality (DGP-E)", fontweight="bold", loc="left")
     ax1.set_xlabel("Time step t")
     ax1.set_ylabel(r"$DCD_t^{\text{PR}}$ (degrees of freedom)")
     ax1.set_ylim(0, 18)

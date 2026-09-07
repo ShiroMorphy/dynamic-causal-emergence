@@ -53,6 +53,8 @@ def format_latex_table() -> str:
         fpr_raw_str = f"{fpr_raw:.3f}"
         if key == "dgp_g":
             fpr_dens_str = r"N/A$^*$"
+        elif key in ("dgp_d", "dgp_e", "dgp_h", "dgp_i", "dgp_j"):
+            fpr_dens_str = "N/A"
         elif fpr_dens is not None:
             fpr_dens_str = f"{fpr_dens:.3f}"
         else:

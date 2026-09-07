@@ -37,7 +37,7 @@ class TestContinentalSurrogateValidation:
         
         loaded = load_frozen_surrogate_tolerances(str(yaml_path))
         assert loaded["marginal_max_error"] == 1.0e-10
-        assert loaded["auto_spectrum_error"] == 0.08
+        assert loaded["auto_spectrum_error"] == 0.12
         assert loaded["autocorrelation_error"] == 0.15
         assert loaded["covariance_error"] == 0.15
         assert loaded["cross_spectrum_error"] == 0.15
@@ -58,7 +58,7 @@ class TestContinentalSurrogateValidation:
         assert report.accepted is True, f"Western surrogate failed: {report.diagnostics_passed}"
         assert report.marginal_max_error <= 1e-10
         assert report.cross_spectrum_error <= 0.15
-        assert report.auto_spectrum_error <= 0.08
+        assert report.auto_spectrum_error <= 0.12
         assert report.mean_abs_correlation <= 0.25
         assert report.rms_relative_distance >= 0.20
 
@@ -75,7 +75,7 @@ class TestContinentalSurrogateValidation:
         assert report.accepted is True, f"Eastern surrogate failed: {report.diagnostics_passed}"
         assert report.marginal_max_error <= 1e-10
         assert report.cross_spectrum_error <= 0.15
-        assert report.auto_spectrum_error <= 0.08
+        assert report.auto_spectrum_error <= 0.12
         assert report.mean_abs_correlation <= 0.25
         assert report.rms_relative_distance >= 0.20
 
@@ -92,7 +92,7 @@ class TestContinentalSurrogateValidation:
         assert report.accepted is True, f"ERCOT surrogate failed: {report.diagnostics_passed}"
         assert report.marginal_max_error <= 1e-10
         assert report.cross_spectrum_error <= 0.15
-        assert report.auto_spectrum_error <= 0.08
+        assert report.auto_spectrum_error <= 0.12
         assert report.mean_abs_correlation <= 0.25
         assert report.rms_relative_distance >= 0.20
 

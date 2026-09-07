@@ -99,7 +99,8 @@ def generate_multivariate_iaaft_surrogate(
     s_curr = np.fft.irfft(s_fourier, n=T, axis=0)
     
     curr_phase_shifts = random_phase_shifts.copy()
-    actual_max_iter = min(max_iter, 2) if p > 10 else min(max_iter, 10)
+    actual_max_iter = min(max_iter, 10)
+    weights = target_amplitudes / (np.sum(target_amplitudes, axis=1, keepdims=True) + 1e-12)
     
     for _ in range(actual_max_iter):
         # 1. Rank match marginal empirical distributions
@@ -111,11 +112,11 @@ def generate_multivariate_iaaft_surrogate(
         # 2. Fourier transform of ranked series
         s_fourier_new = np.fft.rfft(s_ranked, axis=0)
         
-        # 3. Compute circular mean common phase deviation across all channels
+        # 3. Compute amplitude-weighted circular mean common phase deviation across channels
         # (Prichard & Theiler 1994; Schreiber & Schmitz 1996)
         expected_phases = orig_phases + curr_phase_shifts
         phase_deviations = np.angle(s_fourier_new) - expected_phases
-        circ_mean_dev = np.angle(np.sum(np.exp(1j * phase_deviations), axis=1, keepdims=True))
+        circ_mean_dev = np.angle(np.sum(weights * np.exp(1j * phase_deviations), axis=1, keepdims=True))
         circ_mean_dev[0, 0] = 0.0
         if T % 2 == 0:
             circ_mean_dev[-1, 0] = 0.0
@@ -150,7 +151,7 @@ def generate_accepted_multivariate_surrogates(
     X: np.ndarray,
     n_surrogates: int = 1000,
     seed: int = 42,
-    max_attempts_factor: int = 5,
+    max_attempts_factor: int = 10,
     return_reports: bool = False
 ) -> Union[List[np.ndarray], Tuple[List[np.ndarray], List[Any]]]:
     """

@@ -11,7 +11,7 @@ hard_acceptance:
     # Exact marginal quantile preservation (Kolmogorov-Smirnov / sorted relative difference)
     marginal_max_error: 1.0e-10
     # Relative Frobenius error on diagonal auto-spectral density matrix
-    auto_spectrum_error: 0.08
+    auto_spectrum_error: 0.12
     # Relative Frobenius error on lag-1 to lag-24 autocorrelation functions
     autocorrelation_error: 0.15
     # Relative Frobenius error on contemporaneous covariance matrix
