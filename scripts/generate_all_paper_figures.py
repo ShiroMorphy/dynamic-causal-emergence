@@ -168,7 +168,7 @@ def generate_figure_4_vre_response(output_path: str = "paper/figures/fig4_vre_no
     gamma = ercot_h2["best_threshold_gamma"] * 100
     ci_gamma = [c * 100 for c in ercot_h2["threshold_ci_95"]]
     
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(7.2, 3.2), gridspec_kw={"wspace": 0.28})
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(7.2, 3.2), gridspec_kw={"wspace": 0.35})
     
     # Panel A: GAM partial dependence aligned with raw DCD scale
     df_ercot = pd.read_parquet("results/empirical/ercot_dce_2021_retrospective.parquet")
@@ -183,7 +183,7 @@ def generate_figure_4_vre_response(output_path: str = "paper/figures/fig4_vre_no
     ax1.fill_between(vre_grid, confi_level[:, 0], confi_level[:, 1], color=COLORS["accent_orange"], alpha=0.25, label="95% CI")
     p_sup = ercot_h2.get("sup_wald_pvalue", ercot_h2.get("davies_pvalue", 0.787))
     ax1.axvline(gamma, color="firebrick", ls="--", lw=1.4, label=f"Candidate Threshold $\\hat{{\\gamma}}={gamma:.1f}\\%$ (Sup-Wald $p={p_sup:.3f}$)")
-    ax1.set_title("a | Nonlinear Causal Response to VRE (ERCOT)", fontweight="bold", loc="left")
+    ax1.set_title("a | GAM Spline Response (DCD vs VRE)", fontweight="bold", loc="left")
     ax1.set_xlabel("Renewable Penetration VRE (%)")
     ax1.set_ylabel(r"Dynamic Causal Dimension $DCD_t^{\text{PR}}$")
     ax1.legend(loc="upper left", frameon=True, fontsize=6.5)
@@ -195,7 +195,7 @@ def generate_figure_4_vre_response(output_path: str = "paper/figures/fig4_vre_no
     ax2.axhline(0, color="grey", ls=":", lw=1.0)
     ax2.axvspan(ci_gamma[0], ci_gamma[1], color="firebrick", alpha=0.15, label=f"95% CI [{ci_gamma[0]:.1f}%, {ci_gamma[1]:.1f}%]")
     ax2.axvline(gamma, color="firebrick", ls="--", lw=1.4)
-    ax2.set_title("b | Marginal Sensitivity & Hansen Sup-Wald Search", fontweight="bold", loc="left")
+    ax2.set_title("b | Marginal Derivative & Sup-Wald Search", fontweight="bold", loc="left")
     ax2.set_xlabel("Renewable Penetration VRE (%)")
     ax2.set_ylabel("Marginal Derivative")
     ax2.legend(loc="upper right", frameon=True, fontsize=6.5)
