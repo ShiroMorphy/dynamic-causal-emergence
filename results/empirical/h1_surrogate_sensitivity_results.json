@@ -1,0 +1,142 @@
+{
+  "ercot": {
+    "interconnection": "ERCOT",
+    "T": 8760,
+    "p": 9,
+    "empirical_dcd_mean": 4.790537288508884,
+    "empirical_ccg_mean": 0.7392645721110809,
+    "target_B": 100,
+    "tolerance_evaluations": {
+      "0.08": {
+        "tolerance": 0.08,
+        "B_accepted": 100,
+        "N_evaluated": 627,
+        "acceptance_yield": 0.1594896331738437,
+        "critical_value_dcd_05": 5.053772281698397,
+        "critical_value_ccg_95": 0.6816405873939706,
+        "p_value_dcd": 0.009900990099009901,
+        "p_value_ccg": 0.009900990099009901,
+        "surrogate_dcd_mean": 5.201829686871667,
+        "surrogate_dcd_min": 5.010222761262194,
+        "surrogate_dcd_max": 5.450534115008278,
+        "surrogate_ccg_mean": 0.6625466088154266,
+        "significant": true
+      },
+      "0.10": {
+        "tolerance": 0.1,
+        "B_accepted": 100,
+        "N_evaluated": 268,
+        "acceptance_yield": 0.373134328358209,
+        "critical_value_dcd_05": 5.0677133730316575,
+        "critical_value_ccg_95": 0.6777579581628939,
+        "p_value_dcd": 0.009900990099009901,
+        "p_value_ccg": 0.009900990099009901,
+        "surrogate_dcd_mean": 5.221850582178648,
+        "surrogate_dcd_min": 4.992744743967402,
+        "surrogate_dcd_max": 5.559282385455936,
+        "surrogate_ccg_mean": 0.6605217168011057,
+        "significant": true
+      },
+      "0.12": {
+        "tolerance": 0.12,
+        "B_accepted": 100,
+        "N_evaluated": 192,
+        "acceptance_yield": 0.5208333333333334,
+        "critical_value_dcd_05": 5.092262414926183,
+        "critical_value_ccg_95": 0.6777579581628939,
+        "p_value_dcd": 0.009900990099009901,
+        "p_value_ccg": 0.009900990099009901,
+        "surrogate_dcd_mean": 5.241516325194104,
+        "surrogate_dcd_min": 5.015511711741437,
+        "surrogate_dcd_max": 5.6508060013557015,
+        "surrogate_ccg_mean": 0.6597000849674167,
+        "significant": true
+      },
+      "0.15": {
+        "tolerance": 0.15,
+        "B_accepted": 100,
+        "N_evaluated": 163,
+        "acceptance_yield": 0.6134969325153374,
+        "critical_value_dcd_05": 5.09724863194032,
+        "critical_value_ccg_95": 0.6777579581628939,
+        "p_value_dcd": 0.009900990099009901,
+        "p_value_ccg": 0.009900990099009901,
+        "surrogate_dcd_mean": 5.255038048046592,
+        "surrogate_dcd_min": 5.0303179096402015,
+        "surrogate_dcd_max": 5.6508060013557015,
+        "surrogate_ccg_mean": 0.659342292920054,
+        "significant": true
+      }
+    }
+  },
+  "western": {
+    "interconnection": "Western",
+    "T": 8761,
+    "p": 45,
+    "empirical_dcd_mean": 3.5694017780523764,
+    "empirical_ccg_mean": 0.3608252970862382,
+    "target_B": 100,
+    "tolerance_evaluations": {
+      "0.08": {
+        "tolerance": 0.08,
+        "B_accepted": 100,
+        "N_evaluated": 169,
+        "acceptance_yield": 0.591715976331361,
+        "critical_value_dcd_05": 4.320940250803788,
+        "critical_value_ccg_95": 0.4091404188111963,
+        "p_value_dcd": 0.009900990099009901,
+        "p_value_ccg": 0.8316831683168316,
+        "surrogate_dcd_mean": 4.512239315898744,
+        "surrogate_dcd_min": 4.2211944194766975,
+        "surrogate_dcd_max": 4.99918678292346,
+        "surrogate_ccg_mean": 0.3777484219549412,
+        "significant": true
+      },
+      "0.10": {
+        "tolerance": 0.1,
+        "B_accepted": 100,
+        "N_evaluated": 159,
+        "acceptance_yield": 0.6289308176100629,
+        "critical_value_dcd_05": 4.320940250803788,
+        "critical_value_ccg_95": 0.4091404188111963,
+        "p_value_dcd": 0.009900990099009901,
+        "p_value_ccg": 0.8118811881188119,
+        "surrogate_dcd_mean": 4.537998850420197,
+        "surrogate_dcd_min": 4.2211944194766975,
+        "surrogate_dcd_max": 5.174998478491014,
+        "surrogate_ccg_mean": 0.37630835181722544,
+        "significant": true
+      },
+      "0.12": {
+        "tolerance": 0.12,
+        "B_accepted": 100,
+        "N_evaluated": 155,
+        "acceptance_yield": 0.6451612903225806,
+        "critical_value_dcd_05": 4.320940250803788,
+        "critical_value_ccg_95": 0.4091404188111963,
+        "p_value_dcd": 0.009900990099009901,
+        "p_value_ccg": 0.7920792079207921,
+        "surrogate_dcd_mean": 4.552678678802665,
+        "surrogate_dcd_min": 4.2211944194766975,
+        "surrogate_dcd_max": 5.174998478491014,
+        "surrogate_ccg_mean": 0.37556958309156596,
+        "significant": true
+      },
+      "0.15": {
+        "tolerance": 0.15,
+        "B_accepted": 100,
+        "N_evaluated": 153,
+        "acceptance_yield": 0.6535947712418301,
+        "critical_value_dcd_05": 4.320940250803788,
+        "critical_value_ccg_95": 0.4091404188111963,
+        "p_value_dcd": 0.009900990099009901,
+        "p_value_ccg": 0.7821782178217822,
+        "surrogate_dcd_mean": 4.562473997756402,
+        "surrogate_dcd_min": 4.2211944194766975,
+        "surrogate_dcd_max": 5.174998478491014,
+        "surrogate_ccg_mean": 0.37510874318474036,
+        "significant": true
+      }
+    }
+  }
+}

@@ -67,7 +67,7 @@ def generate_figure_2_synthetic(output_path: str = "paper/figures/fig2_synthetic
     ax2.plot(t_eval_c, dgp_c.true_dce_density[:len(t_eval_c)], color=COLORS["neutral_grey"], ls="--", lw=1.5, label=r"Ground Truth $CCG_t$")
     ax2.plot(t_eval_c, model_c.optimal_dce_density_, color=COLORS["primary_blue"], lw=1.4, label=r"Estimated $CCG_t$")
     ax2.axvline(300, color=COLORS["accent_orange"], ls=":", lw=1.2, label=r"Transition $\tau=300$")
-    ax2.set_title("b | Abrupt Emergence / Concentration (DGP-C)", fontweight="bold", loc="left")
+    ax2.set_title("b | Abrupt Causal Concentration (DGP-C)", fontweight="bold", loc="left")
     ax2.set_xlabel("Time step t")
     ax2.set_ylabel(r"$CCG_t$ (nats/dim)")
     ax2.legend(loc="upper left", frameon=True, fontsize=6.5)

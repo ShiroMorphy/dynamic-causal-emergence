@@ -264,3 +264,94 @@ def test_observational_lifting_ground_truth_consistency():
     assert dce_raw == pytest.approx(float(oracle.dce_raw_[q][0]), rel=1e-6)
     assert dce_dens == pytest.approx(float(oracle.dce_density_[q][0]), rel=1e-6)
 
+
+def test_dpi_applies_to_common_measure_not_interventional_ei():
+    """
+    Data Processing Inequality (DPI) applies to mutual information under a single common
+    probability measure: I_mu(V_t; V_{t+1}) <= I_mu(X_t; X_{t+1}).
+    However, interventional Effective Information evaluates micro under do(X) ~ N(0, I_p)
+    and macro under do(V) ~ N(0, I_q) via observational lifting.
+    Because the input measures are different and do not push forward to one another,
+    DPI does NOT mathematically imply EI(V) <= EI(X).
+    """
+    import scipy.linalg
+    
+    # Stable 2-dimensional system
+    A = np.array([[0.725041, 0.255757],
+                  [0.119930, 0.354437]])
+    Sigma = np.array([[3.596036, 1.165077],
+                      [1.165077, 0.627676]])
+    Sigma_X = scipy.linalg.solve_discrete_lyapunov(A, Sigma)
+    
+    # 1. Under the common stationary observational measure:
+    I_obs_X = 0.5 * np.log(np.linalg.det(Sigma_X) / np.linalg.det(Sigma))
+    
+    # Fisher projection (q=1)
+    F = A.T @ np.linalg.inv(Sigma) @ A
+    eigvals, eigvecs = np.linalg.eigh(F)
+    W = eigvecs[:, np.argsort(eigvals)[::-1][:1]]
+    if W[1, 0] < 0:
+        W = -W
+        
+    cov_v = (W.T @ Sigma_X @ W).item()
+    cov_v_cross = (W.T @ Sigma_X @ A.T @ W).item()
+    var_v_cond = cov_v - (cov_v_cross ** 2) / cov_v
+    I_obs_V = 0.5 * np.log(cov_v / var_v_cond)
+    
+    # DPI MUST hold under the common observational measure
+    assert I_obs_V <= I_obs_X + 1e-12, (
+        f"DPI violated under common observational measure: I(V)={I_obs_V:.4f} > I(X)={I_obs_X:.4f}"
+    )
+    
+    # 2. But under independent standardized interventional measures:
+    # Micro EI under do(X) ~ N(0, I_2)
+    p = 2
+    ei_x = 0.5 * np.log(np.linalg.det(np.eye(p) + np.linalg.inv(Sigma) @ A @ A.T))
+    
+    # Macro channel induced by observational lifting
+    W_t_Sigma_X_W = W.T @ Sigma_X @ W
+    B = W.T @ A @ Sigma_X @ W @ np.linalg.inv(W_t_Sigma_X_W)
+    Sigma_X_given_V = Sigma_X - Sigma_X @ W @ np.linalg.inv(W_t_Sigma_X_W) @ W.T @ Sigma_X
+    Sigma_eta = W.T @ (A @ Sigma_X_given_V @ A.T + Sigma) @ W
+    
+    # Macro EI under do(V) ~ N(0, I_1)
+    ei_v = 0.5 * np.log(1.0 + (B @ B.T).item() / Sigma_eta.item())
+    
+    # In this system, EI(V) strictly exceeds EI(X)!
+    delta_ei_raw = ei_v - ei_x
+    assert delta_ei_raw > 0.10, (
+        f"Expected positive raw emergence under observational lifting and standardized intervention: "
+        f"EI(V)={ei_v:.4f}, EI(X)={ei_x:.4f}, delta={delta_ei_raw:.4f}"
+    )
+
+
+def test_positive_raw_emergence_under_fisher_projection():
+    """
+    Verifies that the method's principal Fisher projection can produce positive Delta EI_raw
+    in continuous linear-Gaussian systems via constructive noise suppression,
+    refuting the impossibility conjecture.
+    """
+    from dce.datasets.synthetic import compute_linear_gaussian_dce_ground_truth
+    import scipy.linalg
+    
+    A = np.array([[0.725041, 0.255757],
+                  [0.119930, 0.354437]])
+    Sigma = np.array([[3.596036, 1.165077],
+                      [1.165077, 0.627676]])
+    Sigma_X = scipy.linalg.solve_discrete_lyapunov(A, Sigma)
+    
+    F = A.T @ np.linalg.inv(Sigma) @ A
+    eigvals, eigvecs = np.linalg.eigh(F)
+    W = eigvecs[:, np.argsort(eigvals)[::-1][:1]]
+    if W[1, 0] < 0:
+        W = -W
+        
+    micro_ei, macro_ei, dce_raw, dce_dens = compute_linear_gaussian_dce_ground_truth(
+        A, Sigma, q=1, W=W, Sigma_X=Sigma_X
+    )
+    
+    assert dce_raw == pytest.approx(0.137736, abs=1e-4)
+    assert dce_dens == pytest.approx(0.250337, abs=1e-4)
+    assert dce_raw > 0.0, "dce_raw must be strictly positive in this counterexample"
+
+
